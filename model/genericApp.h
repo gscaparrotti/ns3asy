@@ -14,6 +14,15 @@ struct ConnectionInfoData {
 	unsigned int receiverPort;
 };
 
+
+/**
+ * \brief A class used to carry the fundamental info about a connection
+ *
+ * This class can be useful when there is the need to share the addresses and the ports
+ * used by a connection without sharing the actual socket.
+ * Everything that is inside this class is not a reference to the original socket,
+ * but it is a mere copy which is then safe to share.
+ */
 class ConnectionInfo: public Object {
 public:
 	ConnectionInfo();
@@ -22,9 +31,9 @@ public:
 	void SetReceiverAddress(Address receiver);
 	ConnectionInfoData Get();
 	static Address FromSocket(Ptr<Socket> socket);
+	static string IpAsStringFromAddress(Address address);
+	static unsigned int portFromAddress(Address address);
 private:
-	const char* IpAsStringFromAddress(Address address);
-	unsigned int portFromAddress(Address address);
 	ConnectionInfoData cid;
 };
 

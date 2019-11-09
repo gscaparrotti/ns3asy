@@ -6,9 +6,10 @@
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
 #include "ns3/internet-module.h"
-#include "ns3/point-to-point-module.h"
+#include "ns3/csma-module.h"
 #include <unistd.h>
 #include <iostream>
+#include <vector>
 
 using namespace ns3;
 
@@ -16,17 +17,17 @@ NS_LOG_COMPONENT_DEFINE("ns3asy");
 
 // ===========================================================================
 //
-//         node 0                 node 1
-//   +----------------+    +----------------+
-//   |    ns-3 TCP    |    |    ns-3 TCP    |
-//   +----------------+    +----------------+
-//   |    10.1.1.1    |    |    10.1.1.2    |
-//   +----------------+    +----------------+
-//   | point-to-point |    | point-to-point |
-//   +----------------+    +----------------+
-//           |                     |
-//           +---------------------+
-//                5 Mbps, 2 ms
+//         node 0                node 1                node 2
+//   +----------------+    +----------------+    +----------------+
+//   |    ns-3 TCP    |    |    ns-3 TCP    |    |    ns-3 TCP    |
+//   +----------------+    +----------------+    +----------------+
+//   |    10.1.1.1    |    |    10.1.1.2    |    |    10.1.1.2    |
+//   +----------------+    +----------------+    +----------------+
+//   |      csma      |    |      csma      |    |      csma      |
+//   +----------------+    +----------------+    +----------------+
+//           |                     |                     |
+//           +---------------------+---------------------+
+//                            5 Mbps, 2 ms
 // ===========================================================================
 
 
@@ -44,9 +45,9 @@ static void PacketRead(const char receiverIp[], unsigned int receiverPort, const
 	std::ostringstream outputInfo;
 	outputDebug << "A packet has been read by the socket " << receiverIp << ":"
 			<< receiverPort << "; it was sent by " << senderIp << ":" << senderPort;
-	outputInfo << "Its content is: ";
+	outputInfo << "The read content is: ";
 	for (unsigned int i = 0; i < payloadLength; i++) {
-		outputInfo << static_cast<int>(payload[i]);
+		outputInfo << payload[i];
 	}
 	NS_LOG_DEBUG(outputDebug.str().c_str());
 	NS_LOG_INFO(outputInfo.str().c_str());
@@ -57,9 +58,9 @@ static void PacketSent(const char senderIp[], unsigned int senderPort, const cha
 	std::ostringstream outputInfo;
 	outputDebug << "A packet has been sent by the socket " << senderIp << ":"
 			<< senderPort << "; it was sent to " << receiverIp << ":" << receiverPort;
-	outputInfo << "Its content is: ";
+	outputInfo << "The sent content is: ";
 	for (unsigned int i = 0; i < payloadLength; i++) {
-		outputInfo << static_cast<int>(payload[i]);
+		outputInfo << payload[i];
 	}
 	NS_LOG_DEBUG(outputDebug.str().c_str());
 	NS_LOG_INFO(outputInfo.str().c_str());
@@ -107,19 +108,19 @@ int RunSimulation() {
 	//invece PacketSinkApplication (il nodo 1), che è un' Application che riceve pacchetti e
 	//genera eventi senza trasmettere dati
 	NodeContainer nodes;
-	nodes.Create(2);
+	nodes.Create(3);
 
-	PointToPointHelper pointToPoint;
-	pointToPoint.SetDeviceAttribute("DataRate", StringValue("5Mbps"));
-	pointToPoint.SetChannelAttribute("Delay", StringValue("2ms"));
+	CsmaHelper csma;
+	csma.SetChannelAttribute("DataRate", StringValue("5Mbps"));
+	csma.SetChannelAttribute("Delay", StringValue("2ms"));
 
 	NetDeviceContainer devices;
-	devices = pointToPoint.Install(nodes);
+	devices = csma.Install(nodes);
 
 	//Il canale di comunicazione non è perfetto, ma può generare degli errori
 	Ptr<RateErrorModel> em = CreateObject<RateErrorModel>();
 	em->SetAttribute("ErrorRate", DoubleValue(0.00001));
-	devices.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(em));
+	devices.Get(2)->SetAttribute("ReceiveErrorModel", PointerValue(em));
 
 	InternetStackHelper stack;
 	stack.Install(nodes);
@@ -127,16 +128,6 @@ int RunSimulation() {
 	Ipv4AddressHelper address;
 	address.SetBase("10.1.1.0", "255.255.255.0");
 	Ipv4InterfaceContainer interfaces = address.Assign(devices);
-
-	Ptr<Socket> receiverSocket = Socket::CreateSocket(nodes.Get(1), TcpSocketFactory::GetTypeId());
-	Ptr<GenericApp> receiverApp = CreateObject<GenericApp>();
-	receiverApp->SetOnReceiveFunction(a_onReceiveFtn);
-	receiverApp->SetOnPacketReadFunction(a_onPacketReadFtn);
-	receiverApp->SetOnAcceptFunction(a_onAcceptFtn);
-	receiverApp->Setup(receiverSocket);
-	nodes.Get(1)->AddApplication(receiverApp);
-	receiverApp->SetStartTime(Seconds(1.));
-	receiverApp->SetStopTime(Seconds(20.));
 
 	//CongestionWindow e PhyRxDrop (sotto) sono due trace sources, ossia sorgenti di informazioni
 	//che producono dati al verificarsi di certi eventi.
@@ -148,19 +139,32 @@ int RunSimulation() {
 	//che ereditano da essa ce l'hanno.
 
 	//viene creata la socket per MyApp e gli si aggancia la callback per l'evento CongestionWindow
-	Ptr<Socket> senderSocket = Socket::CreateSocket(nodes.Get(0), TcpSocketFactory::GetTypeId());
-	senderSocket->TraceConnectWithoutContext("CongestionWindow", MakeCallback(congestionWindowCallback));
-	Ptr<GenericApp> senderApp = CreateObject<GenericApp>();
-	senderApp->SetOnSendFunction(a_onSendFtn);
-	senderApp->Setup(senderSocket);
-	nodes.Get(0)->AddApplication(senderApp);
-	senderApp->SetStartTime(Seconds(2.));
-	senderApp->SetStopTime(Seconds(20.));
-	//the smallest default resolution for time is nanosecond, which is 1*10^-9 seconds
-	Simulator::Schedule(Seconds(2.0 + 1e-9), &GenericApp::ConnectToPeerAndSendPackets, senderApp, InetSocketAddress(interfaces.GetAddress(1), 8080), 1040, 10000, DataRate("1Mbps"));
+
+	vector<Ptr<GenericApp>> apps;
+
+	for (unsigned int i = 0; i < nodes.GetN(); i++) {
+		Ptr<Socket> socket = Socket::CreateSocket(nodes.Get(i), TcpSocketFactory::GetTypeId());
+		//socket->TraceConnectWithoutContext("CongestionWindow", MakeCallback(congestionWindowCallback));
+		Ptr<GenericApp> app = CreateObject<GenericApp>();
+		app->SetOnReceiveFunction(a_onReceiveFtn);
+		app->SetOnPacketReadFunction(a_onPacketReadFtn);
+		app->SetOnAcceptFunction(a_onAcceptFtn);
+		app->SetOnSendFunction(a_onSendFtn);
+		app->Setup(socket);
+		nodes.Get(1)->AddApplication(app);
+		app->SetStartTime(Seconds(1.));
+		app->SetStopTime(Seconds(20.));
+		apps.push_back(app);
+	}
+
+	//the last node does not send any packet, but is the one who receives them from all the other nodes
+	for (unsigned int i = 0; i < apps.size()-1; i++) {
+		Simulator::Schedule(Seconds(2.0 + 1e-9), &GenericApp::ConnectToPeerAndSendPackets, apps.at(i),
+				InetSocketAddress(interfaces.GetAddress(2), 8080), 1040, 10000, DataRate("1Mbps"));
+	}
 
 	//viene agganciata la callback per PhyRxDrop alla PacketSinkApplication
-	devices.Get(1)->TraceConnectWithoutContext("PhyRxDrop", MakeCallback(&RxDrop));
+	devices.Get(2)->TraceConnectWithoutContext("PhyRxDrop", MakeCallback(&RxDrop));
 
 	Simulator::Stop(Seconds(20));
 	Simulator::Run();

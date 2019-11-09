@@ -97,7 +97,11 @@ void GenericApp::StopApplication(void) {
 //l'invio del pacchetto successivo al momento opportuno
 void GenericApp::SendPacket(void) {
 	if (++m_packetsSent < m_nPackets) {
-		Ptr<Packet> packet = Create<Packet>(m_packetSize);
+		std::ostringstream buffer;
+		buffer << ConnectionInfo::IpAsStringFromAddress(ConnectionInfo::FromSocket(m_socket))
+			<< " @ " << Simulator::Now().GetSeconds();
+		Ptr<Packet> packet = Create<Packet>(reinterpret_cast<const unsigned char*>(buffer.str().c_str()),
+				buffer.str().length());
 		m_socket->Send(packet);
 		if (m_onSendFtn) {
 			Ptr<ConnectionInfo> connectionInfo = CreateObject<ConnectionInfo>();
@@ -170,19 +174,19 @@ void GenericApp::OnReceive(Ptr<Socket> socket) {
 ConnectionInfo::ConnectionInfo() {}
 
 void ConnectionInfo::SetReceiverAddress(Address receiver) {
-	strcpy(cid.receiverIp, IpAsStringFromAddress(receiver));
+	strcpy(cid.receiverIp, IpAsStringFromAddress(receiver).c_str());
 	cid.receiverPort = portFromAddress(receiver);
 }
 
 void ConnectionInfo::SetSenderAddress(Address sender) {
-	strcpy(cid.senderIp, IpAsStringFromAddress(sender));
+	strcpy(cid.senderIp, IpAsStringFromAddress(sender).c_str());
 	cid.senderPort = portFromAddress(sender);
 }
 
-const char* ConnectionInfo::IpAsStringFromAddress(Address address) {
+string ConnectionInfo::IpAsStringFromAddress(Address address) {
 	std::ostringstream ip;
 	InetSocketAddress::ConvertFrom(address).GetIpv4().Print(ip);
-	return ip.str().c_str();
+	return ip.str();
 }
 
 unsigned int ConnectionInfo::portFromAddress(Address address) {
