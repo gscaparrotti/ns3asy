@@ -15,7 +15,8 @@ using namespace ns3;
 NS_LOG_COMPONENT_DEFINE("ns3asy-GenericApp");
 
 GenericApp::GenericApp() :
-		m_socket(0),
+		m_serverSocket(0),
+		m_sendSocket(0),
 		m_peer(),
 		m_packetSize(0),
 		m_nPackets(0),
@@ -37,7 +38,8 @@ GenericApp::~GenericApp() {
 	//Se un oggetto ha al suo interno dei riferimenti ad un altro oggetto, nel suo distruttore ci
 	//dev'essere una espressione di questo tipo, per indicare che l'oggetto referenziato non è più
 	//in uso.
-	m_socket = 0;
+	m_serverSocket = 0;
+	m_sendSocket = 0;
 }
 
 void GenericApp::SetOnAcceptFunction(void (*onAcceptFtn)(const char[], unsigned int, const char[], unsigned int)) {
@@ -56,8 +58,9 @@ void GenericApp::SetOnSendFunction(void (*onSendFtn)(const char[], unsigned int,
 	m_onSendFtn = onSendFtn;
 }
 
-void GenericApp::Setup(Ptr<Socket> socket) {
-	m_socket = socket;
+void GenericApp::Setup(Ptr<Socket> serverSocket, Ptr<Socket> sendSocket) {
+	m_serverSocket = serverSocket;
+	m_sendSocket = sendSocket;
 }
 
 void GenericApp::ConnectToPeerAndSendPackets(Address address, uint32_t packetSize, uint32_t nPackets, DataRate dataRate) {
@@ -65,19 +68,20 @@ void GenericApp::ConnectToPeerAndSendPackets(Address address, uint32_t packetSiz
 	m_packetSize = packetSize;
 	m_nPackets = nPackets;
 	m_dataRate = dataRate;
-	m_socket->Connect(m_peer);
+	m_sendSocket->Connect(m_peer);
 	SendPacket();
 }
 
 void GenericApp::StartApplication(void) {
 	m_running = true;
-	m_socket->SetAcceptCallback(
+	m_serverSocket->SetAcceptCallback(
 			MakeNullCallback<bool, Ptr<Socket>, const Address&>(),
 			MakeCallback(&GenericApp::OnAccept, this));
-	m_socket->SetRecvCallback(MakeCallback(&GenericApp::OnReceive, this));
+	m_serverSocket->SetRecvCallback(MakeCallback(&GenericApp::OnReceive, this));
 	m_packetsSent = 0;
-	m_socket->Bind(InetSocketAddress(Ipv4Address::GetAny(), 8080));
-	m_socket->Listen();
+	m_sendSocket->Bind();
+	m_serverSocket->Bind(InetSocketAddress(Ipv4Address::GetAny(), 8080));
+	m_serverSocket->Listen();
 }
 
 void GenericApp::StopApplication(void) {
@@ -85,9 +89,12 @@ void GenericApp::StopApplication(void) {
 	if (m_sendEvent.IsRunning()) {
 		Simulator::Cancel(m_sendEvent);
 	}
-	if (m_socket) {
+	if (m_serverSocket) {
 		//if a server socket is closed, its forked sockets are closed as well
-		m_socket->Close();
+		m_serverSocket->Close();
+	}
+	if (m_sendSocket) {
+		m_sendSocket->Close();
 	}
 }
 
@@ -98,14 +105,14 @@ void GenericApp::StopApplication(void) {
 void GenericApp::SendPacket(void) {
 	if (++m_packetsSent < m_nPackets) {
 		std::ostringstream buffer;
-		buffer << ConnectionInfo::IpAsStringFromAddress(ConnectionInfo::FromSocket(m_socket))
+		buffer << ConnectionInfo::IpAsStringFromAddress(ConnectionInfo::FromSocket(m_sendSocket))
 			<< " @ " << Simulator::Now().GetSeconds();
 		Ptr<Packet> packet = Create<Packet>(reinterpret_cast<const unsigned char*>(buffer.str().c_str()),
 				buffer.str().length());
-		m_socket->Send(packet);
+		m_sendSocket->Send(packet);
 		if (m_onSendFtn) {
 			Ptr<ConnectionInfo> connectionInfo = CreateObject<ConnectionInfo>();
-			connectionInfo->SetSenderAddress(ConnectionInfo::FromSocket(m_socket));
+			connectionInfo->SetSenderAddress(ConnectionInfo::FromSocket(m_sendSocket));
 			connectionInfo->SetReceiverAddress(m_peer);
 			unsigned char payload[packet->GetSize()];
 			packet->CopyData(payload, packet->GetSize());

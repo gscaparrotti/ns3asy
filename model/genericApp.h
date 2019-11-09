@@ -43,7 +43,7 @@ public:
 	//this is the destructor. It's declared as virtual so that subclasses can specify their own destructor
 	//and have it actually called at runtime
 	virtual ~GenericApp();
-	void Setup(Ptr<Socket> socket);
+	void Setup(Ptr<Socket> serverSocket, Ptr<Socket> sendSocket);
 	void ConnectToPeerAndSendPackets(Address address, uint32_t packetSize, uint32_t nPackets, DataRate dataRate);
 	void SetOnReceiveFunction(void (*onReceiveFtn)(const char[], unsigned int));
 	void SetOnPacketReadFunction(void (*m_onPacketReadFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int));
@@ -59,7 +59,8 @@ private:
 	void OnReceive(Ptr<Socket> socket);
 	void OnAccept(Ptr<Socket> socket, const Address &from);
 
-	Ptr<Socket> m_socket;
+	Ptr<Socket> m_serverSocket;
+	Ptr<Socket> m_sendSocket;
 	Address m_peer;
 	uint32_t m_packetSize;
 	uint32_t m_nPackets;

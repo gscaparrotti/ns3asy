@@ -104,23 +104,23 @@ int RunSimulation() {
 	Ptr<DefaultSimulatorImpl> s = CreateObject<DefaultSimulatorImpl>();
 	Simulator::SetImplementation(s);
 
+	int nodesCount = 3;
+
 	//Vengono creati due nodi. Uno (il nodo 0) avrà come Application MyApp, l'altro avrà
 	//invece PacketSinkApplication (il nodo 1), che è un' Application che riceve pacchetti e
 	//genera eventi senza trasmettere dati
 	NodeContainer nodes;
-	nodes.Create(3);
+	nodes.Create(nodesCount);
 
-	CsmaHelper csma;
-	csma.SetChannelAttribute("DataRate", StringValue("5Mbps"));
-	csma.SetChannelAttribute("Delay", StringValue("2ms"));
+	SimpleNetDeviceHelper sndh;
 
 	NetDeviceContainer devices;
-	devices = csma.Install(nodes);
+	devices = sndh.Install(nodes);
 
-	//Il canale di comunicazione non è perfetto, ma può generare degli errori
-	Ptr<RateErrorModel> em = CreateObject<RateErrorModel>();
-	em->SetAttribute("ErrorRate", DoubleValue(0.00001));
-	devices.Get(2)->SetAttribute("ReceiveErrorModel", PointerValue(em));
+//	//Il canale di comunicazione non è perfetto, ma può generare degli errori
+//	Ptr<RateErrorModel> em = CreateObject<RateErrorModel>();
+//	em->SetAttribute("ErrorRate", DoubleValue(0.00001));
+//	devices.Get(2)->SetAttribute("ReceiveErrorModel", PointerValue(em));
 
 	InternetStackHelper stack;
 	stack.Install(nodes);
@@ -143,24 +143,27 @@ int RunSimulation() {
 	vector<Ptr<GenericApp>> apps;
 
 	for (unsigned int i = 0; i < nodes.GetN(); i++) {
-		Ptr<Socket> socket = Socket::CreateSocket(nodes.Get(i), TcpSocketFactory::GetTypeId());
+		Ptr<Socket> serverSocket = Socket::CreateSocket(nodes.Get(i), TcpSocketFactory::GetTypeId());
+		Ptr<Socket> sendSocket = Socket::CreateSocket(nodes.Get(i), TcpSocketFactory::GetTypeId());
 		//socket->TraceConnectWithoutContext("CongestionWindow", MakeCallback(congestionWindowCallback));
 		Ptr<GenericApp> app = CreateObject<GenericApp>();
 		app->SetOnReceiveFunction(a_onReceiveFtn);
 		app->SetOnPacketReadFunction(a_onPacketReadFtn);
 		app->SetOnAcceptFunction(a_onAcceptFtn);
 		app->SetOnSendFunction(a_onSendFtn);
-		app->Setup(socket);
+		app->Setup(serverSocket, sendSocket);
 		nodes.Get(1)->AddApplication(app);
 		app->SetStartTime(Seconds(1.));
-		app->SetStopTime(Seconds(20.));
+		app->SetStopTime(Seconds(50.));
 		apps.push_back(app);
 	}
 
+	int recipient[nodesCount] = {1, 2, 0};
+
 	//the last node does not send any packet, but is the one who receives them from all the other nodes
-	for (unsigned int i = 0; i < apps.size()-1; i++) {
+	for (unsigned int i = 0; i < apps.size(); i++) {
 		Simulator::Schedule(Seconds(2.0 + 1e-9), &GenericApp::ConnectToPeerAndSendPackets, apps.at(i),
-				InetSocketAddress(interfaces.GetAddress(2), 8080), 1040, 10000, DataRate("1Mbps"));
+				InetSocketAddress(interfaces.GetAddress(recipient[i]), 8080), 1040, 100, DataRate("1Mbps"));
 	}
 
 	//viene agganciata la callback per PhyRxDrop alla PacketSinkApplication
