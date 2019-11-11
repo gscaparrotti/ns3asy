@@ -5,8 +5,6 @@
 
 extern "C" int RunSimulation();
 
-extern "C" void SetTcpCongestionWindowCallback(void (*callback)(unsigned int, unsigned int));
-
 extern "C" void SetOnReceiveFtn(void (*ftn)(const char[], unsigned int));
 
 extern "C" void SetOnPacketReadFtn(void (*ftn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int));
