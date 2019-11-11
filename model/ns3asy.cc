@@ -66,23 +66,10 @@ static void PacketSent(const char senderIp[], unsigned int senderPort, const cha
 	NS_LOG_INFO(outputInfo.str().c_str());
 }
 
-static void CwndChange(uint32_t oldCwnd, uint32_t newCwnd) {
-	NS_LOG_UNCOND(Simulator::Now ().GetSeconds () << "\t" << newCwnd);
-}
-
-static void RxDrop(Ptr<const Packet> p) {
-	NS_LOG_UNCOND("RxDrop at " << Simulator::Now ().GetSeconds ());
-}
-
-void (*congestionWindowCallback)(unsigned int, unsigned int) = &CwndChange;
 void (*a_onReceiveFtn)(const char[], unsigned int) = &PacketReceived;
 void (*a_onPacketReadFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int) = &PacketRead;
 void (*a_onAcceptFtn)(const char[], unsigned int, const char[], unsigned int) = &ConnectionAccepted;
 void (*a_onSendFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int) = &PacketSent;
-
-void SetTcpCongestionWindowCallback(void (*callback)(unsigned int, unsigned int)) {
-	congestionWindowCallback = callback;
-}
 
 void SetOnReceiveFtn(void (*ftn)(const char[], unsigned int)) {
 	a_onReceiveFtn = ftn;
@@ -104,11 +91,8 @@ int RunSimulation() {
 	Ptr<DefaultSimulatorImpl> s = CreateObject<DefaultSimulatorImpl>();
 	Simulator::SetImplementation(s);
 
-	int nodesCount = 3;
+	unsigned int nodesCount = 3;
 
-	//Vengono creati due nodi. Uno (il nodo 0) avrà come Application MyApp, l'altro avrà
-	//invece PacketSinkApplication (il nodo 1), che è un' Application che riceve pacchetti e
-	//genera eventi senza trasmettere dati
 	NodeContainer nodes;
 	nodes.Create(nodesCount);
 
@@ -117,7 +101,8 @@ int RunSimulation() {
 	NetDeviceContainer devices;
 	devices = sndh.Install(nodes);
 
-//	//Il canale di comunicazione non è perfetto, ma può generare degli errori
+//	//It is possible to set an error model for a certain device which determines
+//	//how its reception of data from the network is affected by error
 //	Ptr<RateErrorModel> em = CreateObject<RateErrorModel>();
 //	em->SetAttribute("ErrorRate", DoubleValue(0.00001));
 //	devices.Get(2)->SetAttribute("ReceiveErrorModel", PointerValue(em));
@@ -129,23 +114,11 @@ int RunSimulation() {
 	address.SetBase("10.1.1.0", "255.255.255.0");
 	Ipv4InterfaceContainer interfaces = address.Assign(devices);
 
-	//CongestionWindow e PhyRxDrop (sotto) sono due trace sources, ossia sorgenti di informazioni
-	//che producono dati al verificarsi di certi eventi.
-	//TraceConnectWithoutContext serve ad agganciare una callback ad una certa trace source.
-	//CongestionWindow è una trace source di TcpSocketBase, perciò TraceConnectWithoutContext
-	//va chiamato sulla socket, mentre PhyRxDrop è una trace source di SimpleNetDevice,
-	//perciò TraceConnectWithoutContext va chiamato sul device.
-	//Il metodo TraceConnectWithoutContext è dichiarato in ObjectBase, perciò tutti le classi
-	//che ereditano da essa ce l'hanno.
-
-	//viene creata la socket per MyApp e gli si aggancia la callback per l'evento CongestionWindow
-
 	vector<Ptr<GenericApp>> apps;
 
-	for (unsigned int i = 0; i < nodes.GetN(); i++) {
+	for (unsigned int i = 0; i < nodesCount; i++) {
 		Ptr<Socket> serverSocket = Socket::CreateSocket(nodes.Get(i), TcpSocketFactory::GetTypeId());
 		Ptr<Socket> sendSocket = Socket::CreateSocket(nodes.Get(i), TcpSocketFactory::GetTypeId());
-		//socket->TraceConnectWithoutContext("CongestionWindow", MakeCallback(congestionWindowCallback));
 		Ptr<GenericApp> app = CreateObject<GenericApp>();
 		app->SetOnReceiveFunction(a_onReceiveFtn);
 		app->SetOnPacketReadFunction(a_onPacketReadFtn);
@@ -158,16 +131,13 @@ int RunSimulation() {
 		apps.push_back(app);
 	}
 
-	int recipient[nodesCount] = {1, 2, 0};
+	unsigned int recipient[nodesCount] = {1, 2, 0};
 
-	//the last node does not send any packet, but is the one who receives them from all the other nodes
-	for (unsigned int i = 0; i < apps.size(); i++) {
+	for (unsigned int i = 0; i < nodesCount; i++) {
 		Simulator::Schedule(Seconds(2.0 + 1e-9), &GenericApp::ConnectToPeerAndSendPackets, apps.at(i),
-				InetSocketAddress(interfaces.GetAddress(recipient[i]), 8080), 1040, 100, DataRate("1Mbps"));
+				InetSocketAddress(recipient[i] == i ? Ipv4Address::GetLoopback() :
+				interfaces.GetAddress(recipient[i]), 8080), 1040, 100, DataRate("1Mbps"));
 	}
-
-	//viene agganciata la callback per PhyRxDrop alla PacketSinkApplication
-	devices.Get(2)->TraceConnectWithoutContext("PhyRxDrop", MakeCallback(&RxDrop));
 
 	Simulator::Stop(Seconds(20));
 	Simulator::Run();
