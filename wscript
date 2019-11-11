@@ -11,6 +11,7 @@ def build(bld):
     module.source = [
         'model/ns3asy.cc',
         'model/genericApp.cc',
+        'model/defaultCallbacks.cc',
         'helper/ns3asy-helper.cc',
         ]
 
@@ -24,6 +25,7 @@ def build(bld):
     headers.source = [
         'model/ns3asy.h',
         'model/genericApp.h',
+        'model/defaultCallbacks.h',
         'helper/ns3asy-helper.h',
         ]
 
