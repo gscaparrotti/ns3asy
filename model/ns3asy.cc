@@ -52,11 +52,9 @@ void SetOnSendFtn(void (*ftn)(const char[], unsigned int, const char[], unsigned
 	a_onSendFtn = ftn;
 }
 
-int RunSimulation() {
+int RunSimulation(unsigned int nodesCount, unsigned int recipients[]) {
 	Ptr<DefaultSimulatorImpl> s = CreateObject<DefaultSimulatorImpl>();
 	Simulator::SetImplementation(s);
-
-	unsigned int nodesCount = 3;
 
 	NodeContainer nodes;
 	nodes.Create(nodesCount);
@@ -92,16 +90,14 @@ int RunSimulation() {
 		app->Setup(serverSocket, sendSocket);
 		nodes.Get(1)->AddApplication(app);
 		app->SetStartTime(Seconds(1.));
-		app->SetStopTime(Seconds(50.));
+		//app->SetStopTime(Seconds(50.));
 		apps.push_back(app);
 	}
 
-	unsigned int recipient[nodesCount] = {1, 2, 0};
-
 	for (unsigned int i = 0; i < nodesCount; i++) {
 		Simulator::Schedule(Seconds(2.0 + 1e-9), &GenericApp::ConnectToPeerAndSendPackets, apps.at(i),
-				InetSocketAddress(recipient[i] == i ? Ipv4Address::GetLoopback() :
-				interfaces.GetAddress(recipient[i]), 8080), 1040, 100, DataRate("1Mbps"));
+				InetSocketAddress(recipients[i] == i ? Ipv4Address::GetLoopback() :
+				interfaces.GetAddress(recipients[i]), 8080), 1040, 100, DataRate("1Mbps"));
 	}
 
 	Simulator::Stop(Seconds(20));

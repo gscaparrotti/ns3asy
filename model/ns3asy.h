@@ -3,7 +3,7 @@
 #define NS3ASY_H
 
 
-extern "C" int RunSimulation();
+extern "C" int RunSimulation(unsigned int nodesCount, unsigned int recipients[]);
 
 extern "C" void SetOnReceiveFtn(void (*ftn)(const char[], unsigned int));
 
