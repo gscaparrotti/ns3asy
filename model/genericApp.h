@@ -44,7 +44,8 @@ public:
 	//and have it actually called at runtime
 	virtual ~GenericApp();
 	void Setup(Ptr<Socket> serverSocket, Ptr<Socket> sendSocket);
-	void ConnectToPeerAndSendPackets(Address address, uint32_t packetSize, uint32_t nPackets, DataRate dataRate);
+	void ConnectToPeer(Address address);
+	void SendPackets(uint32_t packetSize, uint32_t nPackets, DataRate dataRate);
 	void SetOnReceiveFunction(void (*onReceiveFtn)(const char[], unsigned int));
 	void SetOnPacketReadFunction(void (*m_onPacketReadFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int));
 	void SetOnAcceptFunction(void (*onReceiveFtn)(const char[], unsigned int, const char[], unsigned int));

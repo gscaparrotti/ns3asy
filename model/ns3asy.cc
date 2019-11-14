@@ -31,10 +31,12 @@ NS_LOG_COMPONENT_DEFINE("ns3asy");
 //
 // ===========================================================================
 
-void (*a_onReceiveFtn)(const char[], unsigned int) = &PacketReceived;
-void (*a_onPacketReadFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int) = &PacketRead;
-void (*a_onAcceptFtn)(const char[], unsigned int, const char[], unsigned int) = &ConnectionAccepted;
-void (*a_onSendFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int) = &PacketSent;
+static vector<Ptr<GenericApp>> apps;
+
+static void (*a_onReceiveFtn)(const char[], unsigned int) = &PacketReceived;
+static void (*a_onPacketReadFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int) = &PacketRead;
+static void (*a_onAcceptFtn)(const char[], unsigned int, const char[], unsigned int) = &ConnectionAccepted;
+static void (*a_onSendFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int) = &PacketSent;
 
 void SetOnReceiveFtn(void (*ftn)(const char[], unsigned int)) {
 	a_onReceiveFtn = ftn;
@@ -52,7 +54,8 @@ void SetOnSendFtn(void (*ftn)(const char[], unsigned int, const char[], unsigned
 	a_onSendFtn = ftn;
 }
 
-int RunSimulation(unsigned int nodesCount, unsigned int recipients[]) {
+int SetupSimulation(unsigned int nodesCount, unsigned int recipients[]) {
+
 	Ptr<DefaultSimulatorImpl> s = CreateObject<DefaultSimulatorImpl>();
 	Simulator::SetImplementation(s);
 
@@ -77,8 +80,6 @@ int RunSimulation(unsigned int nodesCount, unsigned int recipients[]) {
 	address.SetBase("10.1.1.0", "255.255.255.0");
 	Ipv4InterfaceContainer interfaces = address.Assign(devices);
 
-	vector<Ptr<GenericApp>> apps;
-
 	for (unsigned int i = 0; i < nodesCount; i++) {
 		Ptr<Socket> serverSocket = Socket::CreateSocket(nodes.Get(i), TcpSocketFactory::GetTypeId());
 		Ptr<Socket> sendSocket = Socket::CreateSocket(nodes.Get(i), TcpSocketFactory::GetTypeId());
@@ -88,22 +89,35 @@ int RunSimulation(unsigned int nodesCount, unsigned int recipients[]) {
 		app->SetOnAcceptFunction(a_onAcceptFtn);
 		app->SetOnSendFunction(a_onSendFtn);
 		app->Setup(serverSocket, sendSocket);
-		nodes.Get(1)->AddApplication(app);
-		app->SetStartTime(Seconds(1.));
+		nodes.Get(i)->AddApplication(app);
+		app->SetStartTime(Simulator::Now());
 		//app->SetStopTime(Seconds(50.));
 		apps.push_back(app);
 	}
 
 	for (unsigned int i = 0; i < nodesCount; i++) {
-		Simulator::Schedule(Seconds(2.0 + 1e-9), &GenericApp::ConnectToPeerAndSendPackets, apps.at(i),
+		Simulator::Schedule(Seconds(Simulator::Now().GetSeconds() + 1e-9), &GenericApp::ConnectToPeer, apps.at(i),
 				InetSocketAddress(recipients[i] == i ? Ipv4Address::GetLoopback() :
-				interfaces.GetAddress(recipients[i]), 8080), 1040, 100, DataRate("1Mbps"));
+				interfaces.GetAddress(recipients[i]), 8080));
 	}
 
-	Simulator::Stop(Seconds(20));
-	Simulator::Run();
-	Simulator::Destroy();
-
 	return 0;
+}
+
+void SchedulePacketsSending(unsigned int senderIndex, unsigned int nPackets) {
+	Simulator::Schedule(Seconds(Simulator::Now().GetSeconds() + 1e-9), &GenericApp::SendPackets,
+			apps.at(senderIndex), 1040, nPackets, DataRate("1Mbps"));
+}
+
+void ResumeSimulation(double delay) {
+	if (delay >= 0) {
+		Simulator::Stop(Seconds(Simulator::Now().GetSeconds() + delay));
+	}
+	Simulator::Run();
+}
+
+void StopSimulation() {
+	Simulator::Stop();
+	Simulator::Destroy();
 }
 

@@ -63,12 +63,15 @@ void GenericApp::Setup(Ptr<Socket> serverSocket, Ptr<Socket> sendSocket) {
 	m_sendSocket = sendSocket;
 }
 
-void GenericApp::ConnectToPeerAndSendPackets(Address address, uint32_t packetSize, uint32_t nPackets, DataRate dataRate) {
+void GenericApp::ConnectToPeer(Address address) {
 	m_peer = address;
+	m_sendSocket->Connect(m_peer);
+}
+
+void GenericApp::SendPackets(uint32_t packetSize, uint32_t nPackets, DataRate dataRate) {
 	m_packetSize = packetSize;
 	m_nPackets = nPackets;
 	m_dataRate = dataRate;
-	m_sendSocket->Connect(m_peer);
 	SendPacket();
 }
 
@@ -84,6 +87,7 @@ void GenericApp::StartApplication(void) {
 	m_serverSocket->Listen();
 }
 
+//called only if stop time for this application is less than the stop time for the simulation
 void GenericApp::StopApplication(void) {
 	m_running = false;
 	if (m_sendEvent.IsRunning()) {
