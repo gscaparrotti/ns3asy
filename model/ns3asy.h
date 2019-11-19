@@ -2,8 +2,13 @@
 #ifndef NS3ASY_H
 #define NS3ASY_H
 
+#include "topology.h"
 
-extern "C" int SetupSimulation(unsigned int nodesCount, unsigned int recipients[]);
+extern "C" void SetNodesCount(unsigned int nodesCount);
+
+extern "C" void AddLink(unsigned int sourceIndex, unsigned int destinationIndex);
+
+extern "C" int FinalizeSimulationSetup();
 
 extern "C" void SchedulePacketsSending(unsigned int senderIndex, unsigned int nPackets);
 

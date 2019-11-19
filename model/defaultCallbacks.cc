@@ -19,7 +19,7 @@ void PacketRead(const char receiverIp[], unsigned int receiverPort, const char s
 		unsigned int senderPort, const unsigned char payload[], unsigned int payloadLength) {
 	std::ostringstream outputDebug;
 	std::ostringstream outputInfo;
-	outputDebug << "A packet has been read by the socket " << receiverIp << ":"
+	outputDebug << "Some packets has been read by the socket " << receiverIp << ":"
 			<< receiverPort << "; it was sent by " << senderIp << ":" << senderPort;
 	outputInfo << "The read content is: ";
 	for (unsigned int i = 0; i < payloadLength; i++) {

@@ -3,11 +3,11 @@
 #include "ns3asy.h"
 #include "genericApp.h"
 #include "defaultCallbacks.h"
+#include "topology.h"
 #include <fstream>
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
 #include "ns3/internet-module.h"
-#include "ns3/csma-module.h"
 #include <unistd.h>
 #include <iostream>
 #include <vector>
@@ -32,6 +32,7 @@ NS_LOG_COMPONENT_DEFINE("ns3asy");
 // ===========================================================================
 
 static vector<Ptr<GenericApp>> apps;
+static Ptr<Topology> topology = CreateObject<Topology>(0);
 
 static void (*a_onReceiveFtn)(const char[], unsigned int) = &PacketReceived;
 static void (*a_onPacketReadFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int) = &PacketRead;
@@ -54,10 +55,20 @@ void SetOnSendFtn(void (*ftn)(const char[], unsigned int, const char[], unsigned
 	a_onSendFtn = ftn;
 }
 
-int SetupSimulation(unsigned int nodesCount, unsigned int recipients[]) {
+void SetNodesCount(unsigned int nodesCount) {
+	topology = CreateObject<Topology>(nodesCount);
+}
+
+void AddLink(unsigned int sourceIndex, unsigned int destinationIndex) {
+	topology->AddReceiver(sourceIndex, destinationIndex);
+}
+
+int FinalizeSimulationSetup() {
 
 	Ptr<DefaultSimulatorImpl> s = CreateObject<DefaultSimulatorImpl>();
 	Simulator::SetImplementation(s);
+
+	unsigned int nodesCount = topology->GetNodesCount();
 
 	NodeContainer nodes;
 	nodes.Create(nodesCount);
@@ -82,13 +93,16 @@ int SetupSimulation(unsigned int nodesCount, unsigned int recipients[]) {
 
 	for (unsigned int i = 0; i < nodesCount; i++) {
 		Ptr<Socket> serverSocket = Socket::CreateSocket(nodes.Get(i), TcpSocketFactory::GetTypeId());
-		Ptr<Socket> sendSocket = Socket::CreateSocket(nodes.Get(i), TcpSocketFactory::GetTypeId());
+		vector<Ptr<Socket>> sendSockets;
+		for (unsigned int k = 0; k < topology->GetReceivers(i).size(); k++) {
+			sendSockets.push_back(Socket::CreateSocket(nodes.Get(i), TcpSocketFactory::GetTypeId()));
+		}
 		Ptr<GenericApp> app = CreateObject<GenericApp>();
 		app->SetOnReceiveFunction(a_onReceiveFtn);
 		app->SetOnPacketReadFunction(a_onPacketReadFtn);
 		app->SetOnAcceptFunction(a_onAcceptFtn);
 		app->SetOnSendFunction(a_onSendFtn);
-		app->Setup(serverSocket, sendSocket);
+		app->Setup(serverSocket, sendSockets);
 		nodes.Get(i)->AddApplication(app);
 		app->SetStartTime(Simulator::Now());
 		//app->SetStopTime(Seconds(50.));
@@ -96,9 +110,13 @@ int SetupSimulation(unsigned int nodesCount, unsigned int recipients[]) {
 	}
 
 	for (unsigned int i = 0; i < nodesCount; i++) {
-		Simulator::Schedule(Seconds(Simulator::Now().GetSeconds() + 1e-9), &GenericApp::ConnectToPeer, apps.at(i),
-				InetSocketAddress(recipients[i] == i ? Ipv4Address::GetLoopback() :
-				interfaces.GetAddress(recipients[i]), 8080));
+		vector<unsigned int> receiversForNode = topology->GetReceivers(i);
+		for(unsigned int k = 0; k < receiversForNode.size(); k++) {
+			unsigned int kthReceiver = receiversForNode.at(k);
+			Simulator::Schedule(Seconds(Simulator::Now().GetSeconds() + 1e-9), &GenericApp::ConnectToPeer, apps.at(i),
+					InetSocketAddress(kthReceiver == i ? Ipv4Address::GetLoopback() :
+					interfaces.GetAddress(kthReceiver), 8080));
+		}
 	}
 
 	return 0;

@@ -30,9 +30,10 @@ public:
 	void SetSenderAddress(Address sender);
 	void SetReceiverAddress(Address receiver);
 	ConnectionInfoData Get();
-	static Address FromSocket(Ptr<Socket> socket);
+	static Address NameFromSocket(Ptr<Socket> socket);
+	static Address PeerNameFromSocket(Ptr<Socket> socket);
 	static string IpAsStringFromAddress(Address address);
-	static unsigned int portFromAddress(Address address);
+	static unsigned int PortFromAddress(Address address);
 private:
 	ConnectionInfoData cid;
 };
@@ -43,7 +44,7 @@ public:
 	//this is the destructor. It's declared as virtual so that subclasses can specify their own destructor
 	//and have it actually called at runtime
 	virtual ~GenericApp();
-	void Setup(Ptr<Socket> serverSocket, Ptr<Socket> sendSocket);
+	void Setup(Ptr<Socket> serverSocket, vector<Ptr<Socket>> sendSockets);
 	void ConnectToPeer(Address address);
 	void SendPackets(uint32_t packetSize, uint32_t nPackets, DataRate dataRate);
 	void SetOnReceiveFunction(void (*onReceiveFtn)(const char[], unsigned int));
@@ -61,8 +62,8 @@ private:
 	void OnAccept(Ptr<Socket> socket, const Address &from);
 
 	Ptr<Socket> m_serverSocket;
-	Ptr<Socket> m_sendSocket;
-	Address m_peer;
+	vector<Ptr<Socket>> m_sendSockets;
+	unsigned int m_nextSocket;
 	uint32_t m_packetSize;
 	uint32_t m_nPackets;
 	DataRate m_dataRate;

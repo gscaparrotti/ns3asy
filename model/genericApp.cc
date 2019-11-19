@@ -16,8 +16,8 @@ NS_LOG_COMPONENT_DEFINE("ns3asy-GenericApp");
 
 GenericApp::GenericApp() :
 		m_serverSocket(0),
-		m_sendSocket(0),
-		m_peer(),
+		m_sendSockets(),
+		m_nextSocket(0),
 		m_packetSize(0),
 		m_nPackets(0),
 		m_dataRate(0),
@@ -39,7 +39,7 @@ GenericApp::~GenericApp() {
 	//dev'essere una espressione di questo tipo, per indicare che l'oggetto referenziato non è più
 	//in uso.
 	m_serverSocket = 0;
-	m_sendSocket = 0;
+	m_sendSockets.clear();
 }
 
 void GenericApp::SetOnAcceptFunction(void (*onAcceptFtn)(const char[], unsigned int, const char[], unsigned int)) {
@@ -58,14 +58,13 @@ void GenericApp::SetOnSendFunction(void (*onSendFtn)(const char[], unsigned int,
 	m_onSendFtn = onSendFtn;
 }
 
-void GenericApp::Setup(Ptr<Socket> serverSocket, Ptr<Socket> sendSocket) {
+void GenericApp::Setup(Ptr<Socket> serverSocket, vector<Ptr<Socket>> sendSockets) {
+	m_sendSockets = sendSockets;
 	m_serverSocket = serverSocket;
-	m_sendSocket = sendSocket;
 }
 
 void GenericApp::ConnectToPeer(Address address) {
-	m_peer = address;
-	m_sendSocket->Connect(m_peer);
+	m_sendSockets.at(m_nextSocket++)->Connect(address);
 }
 
 void GenericApp::SendPackets(uint32_t packetSize, uint32_t nPackets, DataRate dataRate) {
@@ -82,7 +81,9 @@ void GenericApp::StartApplication(void) {
 			MakeCallback(&GenericApp::OnAccept, this));
 	m_serverSocket->SetRecvCallback(MakeCallback(&GenericApp::OnReceive, this));
 	m_packetsSent = 0;
-	m_sendSocket->Bind();
+	for (unsigned int i = 0; i < m_sendSockets.size(); i++) {
+		m_sendSockets.at(i)->Bind();
+	}
 	m_serverSocket->Bind(InetSocketAddress(Ipv4Address::GetAny(), 8080));
 	m_serverSocket->Listen();
 }
@@ -97,8 +98,8 @@ void GenericApp::StopApplication(void) {
 		//if a server socket is closed, its forked sockets are closed as well
 		m_serverSocket->Close();
 	}
-	if (m_sendSocket) {
-		m_sendSocket->Close();
+	for (unsigned int i = 0; i < m_sendSockets.size(); i++) {
+		m_sendSockets.at(i)->Close();
 	}
 }
 
@@ -108,21 +109,24 @@ void GenericApp::StopApplication(void) {
 //l'invio del pacchetto successivo al momento opportuno
 void GenericApp::SendPacket(void) {
 	if (++m_packetsSent < m_nPackets) {
-		std::ostringstream buffer;
-		buffer << ConnectionInfo::IpAsStringFromAddress(ConnectionInfo::FromSocket(m_sendSocket))
-			<< " @ " << Simulator::Now().GetSeconds();
-		Ptr<Packet> packet = Create<Packet>(reinterpret_cast<const unsigned char*>(buffer.str().c_str()),
-				buffer.str().length());
-		m_sendSocket->Send(packet);
-		if (m_onSendFtn) {
-			Ptr<ConnectionInfo> connectionInfo = CreateObject<ConnectionInfo>();
-			connectionInfo->SetSenderAddress(ConnectionInfo::FromSocket(m_sendSocket));
-			connectionInfo->SetReceiverAddress(m_peer);
-			unsigned char payload[packet->GetSize()];
-			packet->CopyData(payload, packet->GetSize());
-			m_onSendFtn(connectionInfo->Get().senderIp, connectionInfo->Get().senderPort,
-					connectionInfo->Get().receiverIp, connectionInfo->Get().receiverPort,
-					payload, packet->GetSize());
+		for (unsigned int i = 0; i < m_sendSockets.size(); i++) {
+			Ptr<Socket> m_sendSocket = m_sendSockets.at(i);
+			std::ostringstream buffer;
+			buffer << "[" << ConnectionInfo::IpAsStringFromAddress(ConnectionInfo::NameFromSocket(m_sendSocket))
+				<< " @ " << Simulator::Now().GetSeconds() << "]";
+			Ptr<Packet> packet = Create<Packet>(reinterpret_cast<const unsigned char*>(buffer.str().c_str()),
+					buffer.str().length());
+			m_sendSocket->Send(packet);
+			if (m_onSendFtn) {
+				Ptr<ConnectionInfo> connectionInfo = CreateObject<ConnectionInfo>();
+				connectionInfo->SetSenderAddress(ConnectionInfo::NameFromSocket(m_sendSocket));
+				connectionInfo->SetReceiverAddress(ConnectionInfo::PeerNameFromSocket(m_sendSocket));
+				unsigned char payload[packet->GetSize()];
+				packet->CopyData(payload, packet->GetSize());
+				m_onSendFtn(connectionInfo->Get().senderIp, connectionInfo->Get().senderPort,
+						connectionInfo->Get().receiverIp, connectionInfo->Get().receiverPort,
+						payload, packet->GetSize());
+			}
 		}
 		ScheduleTx();
 	}
@@ -143,7 +147,7 @@ void GenericApp::ScheduleTx(void) {
 void GenericApp::OnAccept(Ptr<Socket> socket, const Address &from) {
 	if (m_onAcceptFtn) {
 		Ptr<ConnectionInfo> connectionInfo = CreateObject<ConnectionInfo>();
-		connectionInfo->SetReceiverAddress(ConnectionInfo::FromSocket(socket));
+		connectionInfo->SetReceiverAddress(ConnectionInfo::NameFromSocket(socket));
 		connectionInfo->SetSenderAddress(from);
 		m_onAcceptFtn(connectionInfo->Get().receiverIp, connectionInfo->Get().receiverPort,
 				connectionInfo->Get().senderIp, connectionInfo->Get().senderPort);
@@ -157,7 +161,7 @@ void GenericApp::OnAccept(Ptr<Socket> socket, const Address &from) {
 
 void GenericApp::OnReceive(Ptr<Socket> socket) {
 	Ptr<ConnectionInfo> connectionInfo = CreateObject<ConnectionInfo>();
-	connectionInfo->SetReceiverAddress(ConnectionInfo::FromSocket(socket));
+	connectionInfo->SetReceiverAddress(ConnectionInfo::NameFromSocket(socket));
 	if (m_onReceiveFtn) {
 		m_onReceiveFtn(connectionInfo->Get().receiverIp, connectionInfo->Get().receiverPort);
 	}
@@ -186,12 +190,12 @@ ConnectionInfo::ConnectionInfo() {}
 
 void ConnectionInfo::SetReceiverAddress(Address receiver) {
 	strcpy(cid.receiverIp, IpAsStringFromAddress(receiver).c_str());
-	cid.receiverPort = portFromAddress(receiver);
+	cid.receiverPort = PortFromAddress(receiver);
 }
 
 void ConnectionInfo::SetSenderAddress(Address sender) {
 	strcpy(cid.senderIp, IpAsStringFromAddress(sender).c_str());
-	cid.senderPort = portFromAddress(sender);
+	cid.senderPort = PortFromAddress(sender);
 }
 
 string ConnectionInfo::IpAsStringFromAddress(Address address) {
@@ -200,7 +204,7 @@ string ConnectionInfo::IpAsStringFromAddress(Address address) {
 	return ip.str();
 }
 
-unsigned int ConnectionInfo::portFromAddress(Address address) {
+unsigned int ConnectionInfo::PortFromAddress(Address address) {
 	return InetSocketAddress::ConvertFrom(address).GetPort();
 }
 
@@ -208,8 +212,14 @@ ConnectionInfoData ConnectionInfo::Get() {
 	return cid;
 }
 
-Address ConnectionInfo::FromSocket(Ptr<Socket> socket) {
+Address ConnectionInfo::NameFromSocket(Ptr<Socket> socket) {
 	Address address;
 	socket->GetSockName(address);
+	return address;
+}
+
+Address ConnectionInfo::PeerNameFromSocket(Ptr<Socket> socket) {
+	Address address;
+	socket->GetPeerName(address);
 	return address;
 }
