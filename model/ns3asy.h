@@ -10,7 +10,7 @@ extern "C" void AddLink(unsigned int sourceIndex, unsigned int destinationIndex)
 
 extern "C" int FinalizeSimulationSetup();
 
-extern "C" void SchedulePacketsSending(unsigned int senderIndex, unsigned int nPackets);
+extern "C" void SchedulePacketsSending(unsigned int senderIndex, unsigned int nPackets, const char* payload, int length);
 
 extern "C" void ResumeSimulation(double delay);
 

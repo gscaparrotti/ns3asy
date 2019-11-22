@@ -122,9 +122,9 @@ int FinalizeSimulationSetup() {
 	return 0;
 }
 
-void SchedulePacketsSending(unsigned int senderIndex, unsigned int nPackets) {
+void SchedulePacketsSending(unsigned int senderIndex, unsigned int nPackets, const char* payload, int length) {
 	Simulator::Schedule(Seconds(Simulator::Now().GetSeconds() + 1e-9), &GenericApp::SendPackets,
-			apps.at(senderIndex), 1040, nPackets, DataRate("1Mbps"));
+			apps.at(senderIndex), 1040, nPackets, DataRate("1Mbps"), payload, length);
 }
 
 void ResumeSimulation(double delay) {

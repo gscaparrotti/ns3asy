@@ -46,7 +46,7 @@ public:
 	virtual ~GenericApp();
 	void Setup(Ptr<Socket> serverSocket, vector<Ptr<Socket>> sendSockets);
 	void ConnectToPeer(Address address);
-	void SendPackets(uint32_t packetSize, uint32_t nPackets, DataRate dataRate);
+	void SendPackets(uint32_t packetSize, uint32_t nPackets, DataRate dataRate, const char* payload, int length);
 	void SetOnReceiveFunction(void (*onReceiveFtn)(const char[], unsigned int));
 	void SetOnPacketReadFunction(void (*m_onPacketReadFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int));
 	void SetOnAcceptFunction(void (*onReceiveFtn)(const char[], unsigned int, const char[], unsigned int));
@@ -56,8 +56,8 @@ private:
 	virtual void StartApplication(void);
 	virtual void StopApplication(void);
 
-	void ScheduleTx(void);
-	void SendPacket(void);
+	void ScheduleTx(const char* payload, int length);
+	void SendPacket(const char* payload, int length);
 	void OnReceive(Ptr<Socket> socket);
 	void OnAccept(Ptr<Socket> socket, const Address &from);
 

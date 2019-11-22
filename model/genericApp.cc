@@ -67,11 +67,11 @@ void GenericApp::ConnectToPeer(Address address) {
 	m_sendSockets.at(m_nextSocket++)->Connect(address);
 }
 
-void GenericApp::SendPackets(uint32_t packetSize, uint32_t nPackets, DataRate dataRate) {
+void GenericApp::SendPackets(uint32_t packetSize, uint32_t nPackets, DataRate dataRate, const char* payload, int length) {
 	m_packetSize = packetSize;
 	m_nPackets = nPackets;
 	m_dataRate = dataRate;
-	SendPacket();
+	SendPacket(payload, length);
 }
 
 void GenericApp::StartApplication(void) {
@@ -107,15 +107,11 @@ void GenericApp::StopApplication(void) {
 //Una volta inviato il pacchetto chiama il metodo ScheduleTx, che a sua volta
 //mette nella coda degli eventi una nuova chiamata a SendPacket per
 //l'invio del pacchetto successivo al momento opportuno
-void GenericApp::SendPacket(void) {
-	if (++m_packetsSent < m_nPackets) {
+void GenericApp::SendPacket(const char* payload, int length) {
+	if (m_packetsSent < m_nPackets) {
 		for (unsigned int i = 0; i < m_sendSockets.size(); i++) {
 			Ptr<Socket> m_sendSocket = m_sendSockets.at(i);
-			std::ostringstream buffer;
-			buffer << "[" << ConnectionInfo::IpAsStringFromAddress(ConnectionInfo::NameFromSocket(m_sendSocket))
-				<< " @ " << Simulator::Now().GetSeconds() << "]";
-			Ptr<Packet> packet = Create<Packet>(reinterpret_cast<const unsigned char*>(buffer.str().c_str()),
-					buffer.str().length());
+			Ptr<Packet> packet = Create<Packet>(reinterpret_cast<const unsigned char*>(payload), length);
 			m_sendSocket->Send(packet);
 			if (m_onSendFtn) {
 				Ptr<ConnectionInfo> connectionInfo = CreateObject<ConnectionInfo>();
@@ -128,19 +124,20 @@ void GenericApp::SendPacket(void) {
 						payload, packet->GetSize());
 			}
 		}
-		ScheduleTx();
+		m_packetsSent++;
+		ScheduleTx(payload, length);
 	}
 }
 
 //generare gli eventi è responsabilità dell' Application
-void GenericApp::ScheduleTx(void) {
+void GenericApp::ScheduleTx(const char* payload, int length) {
 	if (m_running) {
 		//la frequenza con cui l' Application genera gli eventi non è necessariamente
 		//dipendente dalla velocità del canale di comunicazione sottostante
 		Time tNext(Seconds(m_packetSize * 8 / static_cast<double>(m_dataRate.GetBitRate())));
 		//l'evento del prossimo invio viene assegnato al campo m_sendEvent per
 		//poterlo cancellare nel momento in cui la simulazione si deve fermare
-		m_sendEvent = Simulator::Schedule(tNext, &GenericApp::SendPacket, this);
+		m_sendEvent = Simulator::Schedule(tNext, &GenericApp::SendPacket, this, payload, length);
 	}
 }
 
