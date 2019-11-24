@@ -33,6 +33,7 @@ NS_LOG_COMPONENT_DEFINE("ns3asy");
 
 static vector<Ptr<GenericApp>> apps;
 static Ptr<Topology> topology = CreateObject<Topology>(0);
+static Ipv4InterfaceContainer interfaces;
 
 static void (*a_onReceiveFtn)(const char[], unsigned int) = &PacketReceived;
 static void (*a_onPacketReadFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int) = &PacketRead;
@@ -89,7 +90,7 @@ int FinalizeSimulationSetup() {
 
 	Ipv4AddressHelper address;
 	address.SetBase("10.1.1.0", "255.255.255.0");
-	Ipv4InterfaceContainer interfaces = address.Assign(devices);
+	interfaces = address.Assign(devices);
 
 	for (unsigned int i = 0; i < nodesCount; i++) {
 		Ptr<Socket> serverSocket = Socket::CreateSocket(nodes.Get(i), TcpSocketFactory::GetTypeId());
@@ -137,5 +138,30 @@ void ResumeSimulation(double delay) {
 void StopSimulation() {
 	Simulator::Stop();
 	Simulator::Destroy();
+	apps.clear();
 }
 
+//ALWAYS REMEMBER TO FREE THE RETURNED POINTER!!!
+char* getIpAddressFromIndex(unsigned int index) {
+	char* IpAsString = static_cast<char*>(malloc(16 * sizeof(char)));
+	strcpy(IpAsString, "none");
+	if (index >= 0 && index < interfaces.GetN()) {
+		//a ip address can have at most 26 characters (including the trailing /0)
+		std::ostringstream ipStream;
+		interfaces.GetAddress(index).Print(ipStream);
+		strcpy(IpAsString, ipStream.str().c_str());
+	}
+	return IpAsString;
+}
+
+int getIndexFromIpAddress(const char* ip) {
+	for (unsigned int i = 0; i != interfaces.GetN(); i++) {
+	    std::pair<Ptr<Ipv4>, uint32_t> pair = interfaces.Get(i);
+	    std::ostringstream ipStream;
+	    pair.first->GetAddress(1, 0).GetLocal().Print(ipStream);
+	    if (strcmp(ip, ipStream.str().c_str()) == 0) {
+	    	return i;
+	    }
+	}
+	return -1;
+}

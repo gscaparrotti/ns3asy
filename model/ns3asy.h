@@ -16,6 +16,10 @@ extern "C" void ResumeSimulation(double delay);
 
 extern "C" void StopSimulation();
 
+extern "C" char* getIpAddressFromIndex(unsigned int index);
+
+extern "C" int getIndexFromIpAddress(const char* ip);
+
 extern "C" void SetOnReceiveFtn(void (*ftn)(const char[], unsigned int));
 
 extern "C" void SetOnPacketReadFtn(void (*ftn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int));
