@@ -71,6 +71,7 @@ void GenericApp::SendPackets(uint32_t packetSize, uint32_t nPackets, DataRate da
 	m_packetSize = packetSize;
 	m_nPackets = nPackets;
 	m_dataRate = dataRate;
+	m_packetsSent = 0;
 	SendPacket(payload, length);
 }
 
