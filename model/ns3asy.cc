@@ -8,6 +8,13 @@
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
 #include "ns3/internet-module.h"
+#include "ns3/yans-wifi-helper.h"
+#include "ns3/ssid.h"
+#include "ns3/mobility-helper.h"
+#include "ns3/yans-wifi-channel.h"
+#include "ns3/mobility-model.h"
+#include "ns3/string.h"
+#include "ns3/config.h"
 #include <unistd.h>
 #include <iostream>
 #include <vector>
@@ -64,6 +71,36 @@ void AddLink(unsigned int sourceIndex, unsigned int destinationIndex) {
 	topology->AddReceiver(sourceIndex, destinationIndex);
 }
 
+static void SetSockets(unsigned int nodesCount, NodeContainer nodes) {
+	for (unsigned int i = 0; i < nodesCount; i++) {
+		Ptr<Socket> serverSocket = Socket::CreateSocket(nodes.Get(i), TcpSocketFactory::GetTypeId());
+		vector<Ptr<Socket>> sendSockets;
+		for (unsigned int k = 0; k < topology->GetReceivers(i).size(); k++) {
+			sendSockets.push_back(Socket::CreateSocket(nodes.Get(i), TcpSocketFactory::GetTypeId()));
+		}
+		Ptr<GenericApp> app = CreateObject<GenericApp>();
+		app->SetOnReceiveFunction(a_onReceiveFtn);
+		app->SetOnPacketReadFunction(a_onPacketReadFtn);
+		app->SetOnAcceptFunction(a_onAcceptFtn);
+		app->SetOnSendFunction(a_onSendFtn);
+		app->Setup(serverSocket, sendSockets);
+		nodes.Get(i)->AddApplication(app);
+		app->SetStartTime(Simulator::Now());
+		//app->SetStopTime(Seconds(50.));
+		apps.push_back(app);
+	}
+
+	for (unsigned int i = 0; i < nodesCount; i++) {
+		vector<unsigned int> receiversForNode = topology->GetReceivers(i);
+		for(unsigned int k = 0; k < receiversForNode.size(); k++) {
+			unsigned int kthReceiver = receiversForNode.at(k);
+			Simulator::Schedule(Seconds(Simulator::Now().GetSeconds() + 1e-9), &GenericApp::ConnectToPeer, apps.at(i),
+					InetSocketAddress(kthReceiver == i ? Ipv4Address::GetLoopback() :
+					interfaces.GetAddress(kthReceiver), 8080));
+		}
+	}
+}
+
 int FinalizeSimulationSetup() {
 
 	Ptr<DefaultSimulatorImpl> s = CreateObject<DefaultSimulatorImpl>();
@@ -92,33 +129,80 @@ int FinalizeSimulationSetup() {
 	address.SetBase("10.1.1.0", "255.255.255.0");
 	interfaces = address.Assign(devices);
 
-	for (unsigned int i = 0; i < nodesCount; i++) {
-		Ptr<Socket> serverSocket = Socket::CreateSocket(nodes.Get(i), TcpSocketFactory::GetTypeId());
-		vector<Ptr<Socket>> sendSockets;
-		for (unsigned int k = 0; k < topology->GetReceivers(i).size(); k++) {
-			sendSockets.push_back(Socket::CreateSocket(nodes.Get(i), TcpSocketFactory::GetTypeId()));
-		}
-		Ptr<GenericApp> app = CreateObject<GenericApp>();
-		app->SetOnReceiveFunction(a_onReceiveFtn);
-		app->SetOnPacketReadFunction(a_onPacketReadFtn);
-		app->SetOnAcceptFunction(a_onAcceptFtn);
-		app->SetOnSendFunction(a_onSendFtn);
-		app->Setup(serverSocket, sendSockets);
-		nodes.Get(i)->AddApplication(app);
-		app->SetStartTime(Simulator::Now());
-		//app->SetStopTime(Seconds(50.));
-		apps.push_back(app);
-	}
+	SetSockets(nodesCount, nodes);
 
-	for (unsigned int i = 0; i < nodesCount; i++) {
-		vector<unsigned int> receiversForNode = topology->GetReceivers(i);
-		for(unsigned int k = 0; k < receiversForNode.size(); k++) {
-			unsigned int kthReceiver = receiversForNode.at(k);
-			Simulator::Schedule(Seconds(Simulator::Now().GetSeconds() + 1e-9), &GenericApp::ConnectToPeer, apps.at(i),
-					InetSocketAddress(kthReceiver == i ? Ipv4Address::GetLoopback() :
-					interfaces.GetAddress(kthReceiver), 8080));
-		}
-	}
+	return 0;
+}
+
+int FinalizeWithWifiPhy() {
+	//PHY == physical layer
+
+	std::string phyRate = "HtMcs7";
+	WifiMacHelper wifiMac;
+	WifiHelper wifiHelper;
+	wifiHelper.SetStandard(WIFI_PHY_STANDARD_80211n_5GHZ);
+
+	/* Set up Legacy Channel */
+	YansWifiChannelHelper wifiChannel;
+	wifiChannel.SetPropagationDelay("ns3::ConstantSpeedPropagationDelayModel");
+	wifiChannel.AddPropagationLoss("ns3::FriisPropagationLossModel", "Frequency", DoubleValue(5e9));
+
+	/* Setup Physical Layer */
+	YansWifiPhyHelper wifiPhy = YansWifiPhyHelper::Default();
+	wifiPhy.SetChannel(wifiChannel.Create());
+	wifiPhy.SetErrorRateModel("ns3::YansErrorRateModel");
+	wifiHelper.SetRemoteStationManager("ns3::ConstantRateWifiManager",
+			"DataMode", StringValue(phyRate), "ControlMode", StringValue("HtMcs0"));
+
+	unsigned int nodesCount = topology->GetNodesCount();
+
+	NodeContainer networkNodes;
+	//ad one node for the ap
+	networkNodes.Create(nodesCount + 1);
+	Ptr<Node> apWifiNode = networkNodes.Get(nodesCount);
+
+	/* Configure AP */
+	Ssid ssid = Ssid("network");
+	wifiMac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
+
+	NetDeviceContainer apDevice;
+	apDevice = wifiHelper.Install(wifiPhy, wifiMac, apWifiNode);
+
+	/* Configure STA */
+	/* a station (abbreviated as STA) is a device that has the capability to use the 802.11 protocol */
+	wifiMac.SetType("ns3::StaWifiMac", "Ssid", SsidValue(ssid));
+
+	NetDeviceContainer staDevices;
+	staDevices = wifiHelper.Install(wifiPhy, wifiMac, networkNodes);
+
+	/* Mobility model */
+	MobilityHelper mobility;
+	Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator>();
+	positionAlloc->Add(Vector(0.0, 0.0, 0.0));
+	positionAlloc->Add(Vector(1.0, 1.0, 0.0));
+
+	mobility.SetPositionAllocator(positionAlloc);
+	mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+	mobility.Install(apWifiNode);
+	mobility.Install(networkNodes);
+
+	/* Internet stack */
+	InternetStackHelper stack;
+	stack.Install(networkNodes);
+
+	Ipv4AddressHelper address;
+	address.SetBase("10.1.1.0", "255.255.255.0");
+	Ipv4InterfaceContainer apInterface;
+	apInterface = address.Assign(apDevice);
+	interfaces = address.Assign(staDevices);
+
+	/* Populate routing table */
+	Ipv4GlobalRoutingHelper::PopulateRoutingTables();
+
+	SetSockets(nodesCount, networkNodes);
+
+    wifiPhy.EnablePcap ("AccessPoint", apDevice);
+    wifiPhy.EnablePcap ("Station", staDevices);
 
 	return 0;
 }
