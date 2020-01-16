@@ -15,6 +15,7 @@
 #include "ns3/mobility-model.h"
 #include "ns3/string.h"
 #include "ns3/config.h"
+#include "ns3/flow-monitor-module.h"
 #include <unistd.h>
 #include <iostream>
 #include <vector>
@@ -38,6 +39,7 @@ NS_LOG_COMPONENT_DEFINE("ns3asy");
 //
 // ===========================================================================
 
+static int scheduledEventsCount = 0;
 static vector<Ptr<GenericApp>> apps;
 static Ptr<Topology> topology = CreateObject<Topology>(0);
 static Ipv4InterfaceContainer interfaces;
@@ -85,7 +87,7 @@ static void SetSockets(unsigned int nodesCount, NodeContainer nodes) {
 		app->SetOnSendFunction(a_onSendFtn);
 		app->Setup(serverSocket, sendSockets);
 		nodes.Get(i)->AddApplication(app);
-		app->SetStartTime(Simulator::Now());
+		app->SetStartTime(Seconds(0.));
 		//app->SetStopTime(Seconds(50.));
 		apps.push_back(app);
 	}
@@ -94,7 +96,7 @@ static void SetSockets(unsigned int nodesCount, NodeContainer nodes) {
 		vector<unsigned int> receiversForNode = topology->GetReceivers(i);
 		for(unsigned int k = 0; k < receiversForNode.size(); k++) {
 			unsigned int kthReceiver = receiversForNode.at(k);
-			Simulator::Schedule(Seconds(Simulator::Now().GetSeconds() + 1e-9), &GenericApp::ConnectToPeer, apps.at(i),
+			Simulator::Schedule(Seconds(1e-9), &GenericApp::ConnectToPeer, apps.at(i),
 					InetSocketAddress(kthReceiver == i ? Ipv4Address::GetLoopback() :
 					interfaces.GetAddress(kthReceiver), 8080));
 		}
@@ -145,7 +147,7 @@ int FinalizeWithWifiPhy() {
 	/* Set up Legacy Channel */
 	YansWifiChannelHelper wifiChannel;
 	wifiChannel.SetPropagationDelay("ns3::ConstantSpeedPropagationDelayModel");
-	wifiChannel.AddPropagationLoss("ns3::FriisPropagationLossModel", "Frequency", DoubleValue(5e9));
+	wifiChannel.AddPropagationLoss("ns3::FriisPropagationLossModel");
 
 	/* Setup Physical Layer */
 	YansWifiPhyHelper wifiPhy = YansWifiPhyHelper::Default();
@@ -179,7 +181,7 @@ int FinalizeWithWifiPhy() {
 	MobilityHelper mobility;
 	Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator>();
 	positionAlloc->Add(Vector(0.0, 0.0, 0.0));
-	positionAlloc->Add(Vector(1.0, 1.0, 0.0));
+	positionAlloc->Add(Vector(174.0, 1.0, 0.0));
 
 	mobility.SetPositionAllocator(positionAlloc);
 	mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
@@ -208,11 +210,12 @@ int FinalizeWithWifiPhy() {
 }
 
 void SchedulePacketsSending(unsigned int senderIndex, unsigned int nPackets, const char* payload, int length) {
-	Simulator::Schedule(Seconds(Simulator::Now().GetSeconds() + 1e-9), &GenericApp::SendPackets,
+	Simulator::Schedule(MicroSeconds(++scheduledEventsCount), &GenericApp::SendPackets,
 			apps.at(senderIndex), 1040, nPackets, DataRate("1Mbps"), payload, length);
 }
 
 void ResumeSimulation(double delay) {
+	scheduledEventsCount = 0;
 	if (delay >= 0) {
 		Simulator::Stop(Seconds(Simulator::Now().GetSeconds() + delay));
 	}
