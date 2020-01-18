@@ -15,9 +15,10 @@ using namespace ns3;
 NS_LOG_COMPONENT_DEFINE("ns3asy-GenericApp");
 
 GenericApp::GenericApp() :
+		m_ipAddress(),
 		m_serverSocket(0),
 		m_sendSockets(),
-		m_nextSocket(0),
+		m_sendPort(8081),
 		m_packetSize(0),
 		m_nPackets(0),
 		m_dataRate(0),
@@ -58,13 +59,14 @@ void GenericApp::SetOnSendFunction(void (*onSendFtn)(const char[], unsigned int,
 	m_onSendFtn = onSendFtn;
 }
 
-void GenericApp::Setup(Ptr<Socket> serverSocket, vector<Ptr<Socket>> sendSockets) {
+void GenericApp::Setup(Ptr<Socket> serverSocket, vector<Ptr<Socket>> sendSockets, Ipv4Address ipAddress) {
 	m_sendSockets = sendSockets;
 	m_serverSocket = serverSocket;
+	m_ipAddress = ipAddress;
 }
 
-void GenericApp::ConnectToPeer(Address address) {
-	m_sendSockets.at(m_nextSocket++)->Connect(address);
+void GenericApp::ConnectToPeer(Address address, unsigned int socketIndex) {
+	m_sendSockets.at(socketIndex)->Connect(address);
 }
 
 void GenericApp::SendPackets(uint32_t packetSize, uint32_t nPackets, DataRate dataRate, const char* payload, int length) {
@@ -83,9 +85,9 @@ void GenericApp::StartApplication(void) {
 	m_serverSocket->SetRecvCallback(MakeCallback(&GenericApp::OnReceive, this));
 	m_packetsSent = 0;
 	for (unsigned int i = 0; i < m_sendSockets.size(); i++) {
-		m_sendSockets.at(i)->Bind();
+		m_sendSockets.at(i)->Bind(InetSocketAddress(m_ipAddress, m_sendPort++));
 	}
-	m_serverSocket->Bind(InetSocketAddress(Ipv4Address::GetAny(), 8080));
+	m_serverSocket->Bind(InetSocketAddress(m_ipAddress, 8080));
 	m_serverSocket->Listen();
 }
 

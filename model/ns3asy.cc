@@ -75,20 +75,19 @@ void AddLink(unsigned int sourceIndex, unsigned int destinationIndex) {
 
 static void SetSockets(unsigned int nodesCount, NodeContainer nodes) {
 	for (unsigned int i = 0; i < nodesCount; i++) {
-		Ptr<Socket> serverSocket = Socket::CreateSocket(nodes.Get(i), TcpSocketFactory::GetTypeId());
+		Ptr<Socket> serverSocket = Socket::CreateSocket(nodes.Get(i), UdpSocketFactory::GetTypeId());
 		vector<Ptr<Socket>> sendSockets;
 		for (unsigned int k = 0; k < topology->GetReceivers(i).size(); k++) {
-			sendSockets.push_back(Socket::CreateSocket(nodes.Get(i), TcpSocketFactory::GetTypeId()));
+			sendSockets.push_back(Socket::CreateSocket(nodes.Get(i), UdpSocketFactory::GetTypeId()));
 		}
 		Ptr<GenericApp> app = CreateObject<GenericApp>();
 		app->SetOnReceiveFunction(a_onReceiveFtn);
 		app->SetOnPacketReadFunction(a_onPacketReadFtn);
 		app->SetOnAcceptFunction(a_onAcceptFtn);
 		app->SetOnSendFunction(a_onSendFtn);
-		app->Setup(serverSocket, sendSockets);
+		app->Setup(serverSocket, sendSockets, interfaces.GetAddress(i));
 		nodes.Get(i)->AddApplication(app);
 		app->SetStartTime(Seconds(0.));
-		//app->SetStopTime(Seconds(50.));
 		apps.push_back(app);
 	}
 
@@ -98,7 +97,7 @@ static void SetSockets(unsigned int nodesCount, NodeContainer nodes) {
 			unsigned int kthReceiver = receiversForNode.at(k);
 			Simulator::Schedule(Seconds(1e-9), &GenericApp::ConnectToPeer, apps.at(i),
 					InetSocketAddress(kthReceiver == i ? Ipv4Address::GetLoopback() :
-					interfaces.GetAddress(kthReceiver), 8080));
+					interfaces.GetAddress(kthReceiver), 8080), k);
 		}
 	}
 }
