@@ -3,14 +3,14 @@
 #define NS3ASY_DEFAULT_CALLBACKS
 
 void ConnectionAccepted(const char receiverIp[], unsigned int receiverPort, const char senderIp[],
-		unsigned int senderPort);
+		unsigned int senderPort, double time);
 
-void PacketReceived(const char ip[], unsigned int port);
+void PacketReceived(const char ip[], unsigned int port, double time);
 
 void PacketRead(const char receiverIp[], unsigned int receiverPort, const char senderIp[],
-		unsigned int senderPort, const unsigned char payload[], unsigned int payloadLength);
+		unsigned int senderPort, const unsigned char payload[], unsigned int payloadLength, double time);
 
 void PacketSent(const char senderIp[], unsigned int senderPort, const char receiverIp[],
-		unsigned int receiverPort, const unsigned char payload[], unsigned int payloadLength);
+		unsigned int receiverPort, const unsigned char payload[], unsigned int payloadLength, double time);
 
 #endif

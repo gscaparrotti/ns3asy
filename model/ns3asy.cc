@@ -24,44 +24,30 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("ns3asy");
 
-// ===========================================================================
-//
-//         node 0                node 1                node 2
-//   +----------------+    +----------------+    +----------------+
-//   |    ns-3 TCP    |    |    ns-3 TCP    |    |    ns-3 TCP    |
-//   +----------------+    +----------------+    +----------------+
-//   |    10.1.1.1    |    |    10.1.1.2    |    |    10.1.1.3    |
-//   +----------------+    +----------------+    +----------------+
-//   | simple channel |    | simple channel |    | simple channel |
-//   +----------------+    +----------------+    +----------------+
-//           |                     |                     |
-//           +---------------------+---------------------+
-//
-// ===========================================================================
-
 static int scheduledEventsCount = 0;
+static TypeId transportProtocol = TcpSocketFactory::GetTypeId();
 static vector<Ptr<GenericApp>> apps;
 static Ptr<Topology> topology = CreateObject<Topology>(0);
 static Ipv4InterfaceContainer interfaces;
 
-static void (*a_onReceiveFtn)(const char[], unsigned int) = &PacketReceived;
-static void (*a_onPacketReadFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int) = &PacketRead;
-static void (*a_onAcceptFtn)(const char[], unsigned int, const char[], unsigned int) = &ConnectionAccepted;
-static void (*a_onSendFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int) = &PacketSent;
+static void (*a_onReceiveFtn)(const char[], unsigned int, double) = &PacketReceived;
+static void (*a_onPacketReadFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int, double) = &PacketRead;
+static void (*a_onAcceptFtn)(const char[], unsigned int, const char[], unsigned int, double) = &ConnectionAccepted;
+static void (*a_onSendFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int, double) = &PacketSent;
 
-void SetOnReceiveFtn(void (*ftn)(const char[], unsigned int)) {
+void SetOnReceiveFtn(void (*ftn)(const char[], unsigned int, double)) {
 	a_onReceiveFtn = ftn;
 }
 
-void SetOnPacketReadFtn(void (*ftn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int)) {
+void SetOnPacketReadFtn(void (*ftn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int, double)) {
 	a_onPacketReadFtn = ftn;
 }
 
-void SetOnAcceptFtn(void (*ftn)(const char[], unsigned int, const char[], unsigned int)) {
+void SetOnAcceptFtn(void (*ftn)(const char[], unsigned int, const char[], unsigned int, double)) {
 	a_onAcceptFtn = ftn;
 }
 
-void SetOnSendFtn(void (*ftn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int)) {
+void SetOnSendFtn(void (*ftn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int, double)) {
 	a_onSendFtn = ftn;
 }
 
@@ -73,12 +59,24 @@ void AddLink(unsigned int sourceIndex, unsigned int destinationIndex) {
 	topology->AddReceiver(sourceIndex, destinationIndex);
 }
 
+void setUdp(bool isUdp) {
+	if (isUdp) {
+		transportProtocol = UdpSocketFactory::GetTypeId();
+	} else {
+		transportProtocol = TcpSocketFactory::GetTypeId();
+	}
+}
+
+bool isUdp() {
+	return transportProtocol == UdpSocketFactory::GetTypeId();
+}
+
 static void SetSockets(unsigned int nodesCount, NodeContainer nodes) {
 	for (unsigned int i = 0; i < nodesCount; i++) {
-		Ptr<Socket> serverSocket = Socket::CreateSocket(nodes.Get(i), UdpSocketFactory::GetTypeId());
+		Ptr<Socket> serverSocket = Socket::CreateSocket(nodes.Get(i), transportProtocol);
 		vector<Ptr<Socket>> sendSockets;
 		for (unsigned int k = 0; k < topology->GetReceivers(i).size(); k++) {
-			sendSockets.push_back(Socket::CreateSocket(nodes.Get(i), UdpSocketFactory::GetTypeId()));
+			sendSockets.push_back(Socket::CreateSocket(nodes.Get(i), transportProtocol));
 		}
 		Ptr<GenericApp> app = CreateObject<GenericApp>();
 		app->SetOnReceiveFunction(a_onReceiveFtn);
@@ -225,6 +223,18 @@ void StopSimulation() {
 	Simulator::Stop();
 	Simulator::Destroy();
 	apps.clear();
+}
+
+int getNodesCount() {
+	return topology->GetNodesCount();
+}
+
+int getReceiversN(unsigned int sender) {
+	return topology->GetReceivers(sender).size();
+}
+
+int getReceiverAt(unsigned int sender, unsigned int receiverIndex) {
+	return topology->GetReceivers(sender).at(receiverIndex);
 }
 
 //ALWAYS REMEMBER TO FREE THE RETURNED POINTER!!!

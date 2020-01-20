@@ -47,10 +47,10 @@ public:
 	void Setup(Ptr<Socket> serverSocket, vector<Ptr<Socket>> sendSockets, Ipv4Address ipAddress);
 	void ConnectToPeer(Address address, unsigned int socketIndex);
 	void SendPackets(uint32_t packetSize, uint32_t nPackets, DataRate dataRate, const char* payload, int length);
-	void SetOnReceiveFunction(void (*onReceiveFtn)(const char[], unsigned int));
-	void SetOnPacketReadFunction(void (*m_onPacketReadFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int));
-	void SetOnAcceptFunction(void (*onReceiveFtn)(const char[], unsigned int, const char[], unsigned int));
-	void SetOnSendFunction(void (*m_onPacketReadFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int));
+	void SetOnReceiveFunction(void (*onReceiveFtn)(const char[], unsigned int, double));
+	void SetOnPacketReadFunction(void (*m_onPacketReadFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int, double));
+	void SetOnAcceptFunction(void (*onReceiveFtn)(const char[], unsigned int, const char[], unsigned int, double));
+	void SetOnSendFunction(void (*m_onPacketReadFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int, double));
 
 private:
 	virtual void StartApplication(void);
@@ -72,10 +72,10 @@ private:
 	bool m_running;
 	uint32_t m_packetsSent;
 	//first two parameters: who calls the function; second two parameters: who the function refers to; last parameters: other data
-	void (*m_onReceiveFtn)(const char[], unsigned int);
-	void (*m_onPacketReadFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int);
-	void (*m_onAcceptFtn)(const char[], unsigned int, const char[], unsigned int);
-	void (*m_onSendFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int);
+	void (*m_onReceiveFtn)(const char[], unsigned int, double);
+	void (*m_onPacketReadFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int, double);
+	void (*m_onAcceptFtn)(const char[], unsigned int, const char[], unsigned int, double);
+	void (*m_onSendFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int, double);
 };
 
 #endif

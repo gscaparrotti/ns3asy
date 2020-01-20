@@ -43,19 +43,19 @@ GenericApp::~GenericApp() {
 	m_sendSockets.clear();
 }
 
-void GenericApp::SetOnAcceptFunction(void (*onAcceptFtn)(const char[], unsigned int, const char[], unsigned int)) {
+void GenericApp::SetOnAcceptFunction(void (*onAcceptFtn)(const char[], unsigned int, const char[], unsigned int, double)) {
 	m_onAcceptFtn = onAcceptFtn;
 }
 
-void GenericApp::SetOnReceiveFunction(void (*onReceiveFtn)(const char[], unsigned int)) {
+void GenericApp::SetOnReceiveFunction(void (*onReceiveFtn)(const char[], unsigned int, double)) {
 	m_onReceiveFtn = onReceiveFtn;
 }
 
-void GenericApp::SetOnPacketReadFunction(void (*onPacketReadFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int)) {
+void GenericApp::SetOnPacketReadFunction(void (*onPacketReadFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int, double)) {
 	m_onPacketReadFtn = onPacketReadFtn;
 }
 
-void GenericApp::SetOnSendFunction(void (*onSendFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int)) {
+void GenericApp::SetOnSendFunction(void (*onSendFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int, double)) {
 	m_onSendFtn = onSendFtn;
 }
 
@@ -124,7 +124,7 @@ void GenericApp::SendPacket(const char* payload, int length) {
 				packet->CopyData(payload, packet->GetSize());
 				m_onSendFtn(connectionInfo->Get().senderIp, connectionInfo->Get().senderPort,
 						connectionInfo->Get().receiverIp, connectionInfo->Get().receiverPort,
-						payload, packet->GetSize());
+						payload, packet->GetSize(), Simulator::Now().GetSeconds());
 			}
 		}
 		m_packetsSent++;
@@ -150,7 +150,7 @@ void GenericApp::OnAccept(Ptr<Socket> socket, const Address &from) {
 		connectionInfo->SetReceiverAddress(ConnectionInfo::NameFromSocket(socket));
 		connectionInfo->SetSenderAddress(from);
 		m_onAcceptFtn(connectionInfo->Get().receiverIp, connectionInfo->Get().receiverPort,
-				connectionInfo->Get().senderIp, connectionInfo->Get().senderPort);
+				connectionInfo->Get().senderIp, connectionInfo->Get().senderPort, Simulator::Now().GetSeconds());
 
 	}
 	//la callback Recv deve essere impostata all'interno della callback onAccept sull'oggetto fornito come parametro
@@ -163,7 +163,7 @@ void GenericApp::OnReceive(Ptr<Socket> socket) {
 	Ptr<ConnectionInfo> connectionInfo = CreateObject<ConnectionInfo>();
 	connectionInfo->SetReceiverAddress(ConnectionInfo::NameFromSocket(socket));
 	if (m_onReceiveFtn) {
-		m_onReceiveFtn(connectionInfo->Get().receiverIp, connectionInfo->Get().receiverPort);
+		m_onReceiveFtn(connectionInfo->Get().receiverIp, connectionInfo->Get().receiverPort, Simulator::Now().GetSeconds());
 	}
 	Ptr<Packet> packet;
 	Address from;
@@ -176,7 +176,7 @@ void GenericApp::OnReceive(Ptr<Socket> socket) {
 			packet->CopyData(payload, packet->GetSize());
 			m_onPacketReadFtn(connectionInfo->Get().receiverIp, connectionInfo->Get().receiverPort,
 					connectionInfo->Get().senderIp, connectionInfo->Get().senderPort,
-					payload, packet->GetSize());
+					payload, packet->GetSize(), Simulator::Now().GetSeconds());
 		}
 	}
 //	if (m_isServer) {
