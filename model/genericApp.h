@@ -44,6 +44,8 @@ public:
 	//this is the destructor. It's declared as virtual so that subclasses can specify their own destructor
 	//and have it actually called at runtime
 	virtual ~GenericApp();
+	virtual void StartApplication(void);
+	virtual void StopApplication(void);
 	void Setup(Ptr<Socket> serverSocket, vector<Ptr<Socket>> sendSockets, Ipv4Address ipAddress);
 	void ConnectToPeer(Address address, unsigned int socketIndex);
 	void SendPackets(uint32_t packetSize, uint32_t nPackets, DataRate dataRate, const char* payload, int length);
@@ -53,16 +55,17 @@ public:
 	void SetOnSendFunction(void (*m_onPacketReadFtn)(const char[], unsigned int, const char[], unsigned int, const unsigned char[], unsigned int, double));
 
 private:
-	virtual void StartApplication(void);
-	virtual void StopApplication(void);
 
 	void ScheduleTx(const char* payload, int length);
 	void SendPacket(const char* payload, int length);
 	void OnReceive(Ptr<Socket> socket);
+	void OnGracefulClose(Ptr<Socket> socket);
+	void OnErrorClose(Ptr<Socket> socket);
 	void OnAccept(Ptr<Socket> socket, const Address &from);
 
 	Ipv4Address m_ipAddress;
 	Ptr<Socket> m_serverSocket;
+	Ptr<Socket> m_realServerSocket;
 	vector<Ptr<Socket>> m_sendSockets;
 	unsigned int m_sendPort;
 	uint32_t m_packetSize;

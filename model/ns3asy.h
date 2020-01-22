@@ -8,11 +8,9 @@ extern "C" void SetNodesCount(unsigned int nodesCount);
 
 extern "C" void AddLink(unsigned int sourceIndex, unsigned int destinationIndex);
 
-extern "C" void setUdp(bool isUdp);
-
 extern "C" bool isUdp();
 
-extern "C" int FinalizeSimulationSetup();
+extern "C" int FinalizeSimulationSetup(bool isUdp, int packetLength, double errorRate, const char* dataRate);
 
 extern "C" int FinalizeWithWifiPhy();
 

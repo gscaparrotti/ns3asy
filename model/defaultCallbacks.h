@@ -13,4 +13,6 @@ void PacketRead(const char receiverIp[], unsigned int receiverPort, const char s
 void PacketSent(const char senderIp[], unsigned int senderPort, const char receiverIp[],
 		unsigned int receiverPort, const unsigned char payload[], unsigned int payloadLength, double time);
 
+void SocketClosed(const char ip[], unsigned int port, bool error);
+
 #endif

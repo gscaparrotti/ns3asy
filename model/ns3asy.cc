@@ -16,6 +16,7 @@
 #include "ns3/string.h"
 #include "ns3/config.h"
 #include "ns3/flow-monitor-module.h"
+#include "ns3/csma-module.h"
 #include <unistd.h>
 #include <iostream>
 #include <vector>
@@ -25,6 +26,8 @@ using namespace ns3;
 NS_LOG_COMPONENT_DEFINE("ns3asy");
 
 static int scheduledEventsCount = 0;
+static int length = 1040;
+static const char* dataRateString;
 static TypeId transportProtocol = TcpSocketFactory::GetTypeId();
 static vector<Ptr<GenericApp>> apps;
 static Ptr<Topology> topology = CreateObject<Topology>(0);
@@ -57,14 +60,6 @@ void SetNodesCount(unsigned int nodesCount) {
 
 void AddLink(unsigned int sourceIndex, unsigned int destinationIndex) {
 	topology->AddReceiver(sourceIndex, destinationIndex);
-}
-
-void setUdp(bool isUdp) {
-	if (isUdp) {
-		transportProtocol = UdpSocketFactory::GetTypeId();
-	} else {
-		transportProtocol = TcpSocketFactory::GetTypeId();
-	}
 }
 
 bool isUdp() {
@@ -100,7 +95,7 @@ static void SetSockets(unsigned int nodesCount, NodeContainer nodes) {
 	}
 }
 
-int FinalizeSimulationSetup() {
+int FinalizeSimulationSetup(bool isUdp, int packetLength, double errorRate, const char* dataRate) {
 
 	Ptr<DefaultSimulatorImpl> s = CreateObject<DefaultSimulatorImpl>();
 	Simulator::SetImplementation(s);
@@ -110,16 +105,20 @@ int FinalizeSimulationSetup() {
 	NodeContainer nodes;
 	nodes.Create(nodesCount);
 
-	SimpleNetDeviceHelper sndh;
+	CsmaHelper csma;
 
 	NetDeviceContainer devices;
-	devices = sndh.Install(nodes);
+	devices = csma.Install(nodes);
 
-//	//It is possible to set an error model for a certain device which determines
-//	//how its reception of data from the network is affected by error
-//	Ptr<RateErrorModel> em = CreateObject<RateErrorModel>();
-//	em->SetAttribute("ErrorRate", DoubleValue(0.00001));
-//	devices.Get(2)->SetAttribute("ReceiveErrorModel", PointerValue(em));
+	//It is possible to set an error model for a certain device which determines
+	//how its reception of data from the network is affected by error
+	if (errorRate > 0) {
+		Ptr<RateErrorModel> em = CreateObject<RateErrorModel>();
+		em->SetRate(errorRate);
+		for(unsigned int i = 0; i < devices.GetN(); i++) {
+			devices.Get(i)->SetAttribute("ReceiveErrorModel", PointerValue(em));
+		}
+	}
 
 	InternetStackHelper stack;
 	stack.Install(nodes);
@@ -127,6 +126,14 @@ int FinalizeSimulationSetup() {
 	Ipv4AddressHelper address;
 	address.SetBase("10.1.1.0", "255.255.255.0");
 	interfaces = address.Assign(devices);
+
+	if (packetLength > 0) {
+		length = packetLength;
+	}
+	if (isUdp) {
+		transportProtocol = UdpSocketFactory::GetTypeId();
+	}
+	dataRateString = dataRate;
 
 	SetSockets(nodesCount, nodes);
 
@@ -208,18 +215,22 @@ int FinalizeWithWifiPhy() {
 
 void SchedulePacketsSending(unsigned int senderIndex, unsigned int nPackets, const char* payload, int length) {
 	Simulator::Schedule(MicroSeconds(++scheduledEventsCount), &GenericApp::SendPackets,
-			apps.at(senderIndex), 1040, nPackets, DataRate("1Mbps"), payload, length);
+			apps.at(senderIndex), 1040, nPackets, DataRate(dataRateString), payload, length);
 }
 
 void ResumeSimulation(double delay) {
 	scheduledEventsCount = 0;
 	if (delay >= 0) {
-		Simulator::Stop(Seconds(Simulator::Now().GetSeconds() + delay));
+		Simulator::Stop(Seconds(delay));
 	}
 	Simulator::Run();
 }
 
 void StopSimulation() {
+	for (unsigned int i = 0; i < apps.size(); i++) {
+		apps.at(i)->StopApplication();
+	}
+	Simulator::Run();
 	Simulator::Stop();
 	Simulator::Destroy();
 	apps.clear();

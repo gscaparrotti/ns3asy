@@ -42,3 +42,8 @@ void PacketSent(const char senderIp[], unsigned int senderPort, const char recei
 	NS_LOG_DEBUG(outputDebug.str().c_str());
 	NS_LOG_INFO(outputInfo.str().c_str());
 }
+
+void SocketClosed(const char ip[], unsigned int port, bool error) {
+	NS_LOG_DEBUG("The socket " << ip << ":" << port << " has been closed "
+			<< (error ? "due to an error" : "gracefully"));
+}

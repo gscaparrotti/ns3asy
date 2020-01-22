@@ -1,6 +1,7 @@
 /* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
 
 #include "genericApp.h"
+#include "defaultCallbacks.h"
 #include <fstream>
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
@@ -17,6 +18,7 @@ NS_LOG_COMPONENT_DEFINE("ns3asy-GenericApp");
 GenericApp::GenericApp() :
 		m_ipAddress(),
 		m_serverSocket(0),
+		m_realServerSocket(0),
 		m_sendSockets(),
 		m_sendPort(8081),
 		m_packetSize(0),
@@ -39,6 +41,7 @@ GenericApp::~GenericApp() {
 	//Se un oggetto ha al suo interno dei riferimenti ad un altro oggetto, nel suo distruttore ci
 	//dev'essere una espressione di questo tipo, per indicare che l'oggetto referenziato non è più
 	//in uso.
+	m_realServerSocket = 0;
 	m_serverSocket = 0;
 	m_sendSockets.clear();
 }
@@ -83,9 +86,15 @@ void GenericApp::StartApplication(void) {
 			MakeNullCallback<bool, Ptr<Socket>, const Address&>(),
 			MakeCallback(&GenericApp::OnAccept, this));
 	m_serverSocket->SetRecvCallback(MakeCallback(&GenericApp::OnReceive, this));
+	m_serverSocket->SetCloseCallbacks(
+			MakeCallback(&GenericApp::OnGracefulClose, this),
+			MakeCallback(&GenericApp::OnErrorClose, this));
 	m_packetsSent = 0;
 	for (unsigned int i = 0; i < m_sendSockets.size(); i++) {
 		m_sendSockets.at(i)->Bind(InetSocketAddress(m_ipAddress, m_sendPort++));
+		m_sendSockets.at(i)->SetCloseCallbacks(
+				MakeCallback(&GenericApp::OnGracefulClose, this),
+				MakeCallback(&GenericApp::OnErrorClose, this));
 	}
 	m_serverSocket->Bind(InetSocketAddress(m_ipAddress, 8080));
 	m_serverSocket->Listen();
@@ -98,8 +107,10 @@ void GenericApp::StopApplication(void) {
 		Simulator::Cancel(m_sendEvent);
 	}
 	if (m_serverSocket) {
-		//if a server socket is closed, its forked sockets are closed as well
 		m_serverSocket->Close();
+	}
+	if (m_realServerSocket) {
+		m_realServerSocket->Close();
 	}
 	for (unsigned int i = 0; i < m_sendSockets.size(); i++) {
 		m_sendSockets.at(i)->Close();
@@ -114,17 +125,20 @@ void GenericApp::SendPacket(const char* payload, int length) {
 	if (m_packetsSent < m_nPackets) {
 		for (unsigned int i = 0; i < m_sendSockets.size(); i++) {
 			Ptr<Socket> m_sendSocket = m_sendSockets.at(i);
-			Ptr<Packet> packet = Create<Packet>(reinterpret_cast<const unsigned char*>(payload), length);
-			m_sendSocket->Send(packet);
-			if (m_onSendFtn) {
-				Ptr<ConnectionInfo> connectionInfo = CreateObject<ConnectionInfo>();
-				connectionInfo->SetSenderAddress(ConnectionInfo::NameFromSocket(m_sendSocket));
-				connectionInfo->SetReceiverAddress(ConnectionInfo::PeerNameFromSocket(m_sendSocket));
-				unsigned char payload[packet->GetSize()];
-				packet->CopyData(payload, packet->GetSize());
-				m_onSendFtn(connectionInfo->Get().senderIp, connectionInfo->Get().senderPort,
-						connectionInfo->Get().receiverIp, connectionInfo->Get().receiverPort,
-						payload, packet->GetSize(), Simulator::Now().GetSeconds());
+			Address peerName;
+			if (m_sendSocket->GetPeerName(peerName) == 0) {
+				Ptr<Packet> packet = Create<Packet>(reinterpret_cast<const unsigned char*>(payload), length);
+				m_sendSocket->Send(packet);
+				if (m_onSendFtn) {
+					Ptr<ConnectionInfo> connectionInfo = CreateObject<ConnectionInfo>();
+					connectionInfo->SetSenderAddress(ConnectionInfo::NameFromSocket(m_sendSocket));
+					connectionInfo->SetReceiverAddress(peerName);
+					unsigned char payload[packet->GetSize()];
+					packet->CopyData(payload, packet->GetSize());
+					m_onSendFtn(connectionInfo->Get().senderIp, connectionInfo->Get().senderPort,
+							connectionInfo->Get().receiverIp, connectionInfo->Get().receiverPort,
+							payload, packet->GetSize(), Simulator::Now().GetSeconds());
+				}
 			}
 		}
 		m_packetsSent++;
@@ -144,6 +158,19 @@ void GenericApp::ScheduleTx(const char* payload, int length) {
 	}
 }
 
+void GenericApp::OnGracefulClose(Ptr<Socket> socket) {
+	Ptr<ConnectionInfo> connectionInfo = CreateObject<ConnectionInfo>();
+	connectionInfo->SetReceiverAddress(ConnectionInfo::NameFromSocket(socket));
+	SocketClosed(connectionInfo->Get().receiverIp, connectionInfo->Get().receiverPort, false);
+	//socket->Connect(ConnectionInfo::PeerNameFromSocket(socket)); //this works
+}
+
+void GenericApp::OnErrorClose(Ptr<Socket> socket) {
+	Ptr<ConnectionInfo> connectionInfo = CreateObject<ConnectionInfo>();
+	connectionInfo->SetReceiverAddress(ConnectionInfo::NameFromSocket(socket));
+	SocketClosed(connectionInfo->Get().receiverIp, connectionInfo->Get().receiverPort, true);
+}
+
 void GenericApp::OnAccept(Ptr<Socket> socket, const Address &from) {
 	if (m_onAcceptFtn) {
 		Ptr<ConnectionInfo> connectionInfo = CreateObject<ConnectionInfo>();
@@ -157,6 +184,10 @@ void GenericApp::OnAccept(Ptr<Socket> socket, const Address &from) {
 	//perchè quando una socket tcp diventa connessa viene duplicata e le precedenti callback impostate
 	//vengono eliminate
 	socket->SetRecvCallback(MakeCallback(&GenericApp::OnReceive, this));
+	socket->SetCloseCallbacks(
+			MakeCallback(&GenericApp::OnGracefulClose, this),
+			MakeCallback(&GenericApp::OnErrorClose, this));
+	m_realServerSocket = socket;
 }
 
 void GenericApp::OnReceive(Ptr<Socket> socket) {
