@@ -27,7 +27,7 @@ NS_LOG_COMPONENT_DEFINE("ns3asy");
 
 static int scheduledEventsCount = 0;
 static int length = 1040;
-static const char* dataRateString;
+static char* dataRateString;
 static TypeId transportProtocol = TcpSocketFactory::GetTypeId();
 static vector<Ptr<GenericApp>> apps;
 static Ptr<Topology> topology = CreateObject<Topology>(0);
@@ -133,7 +133,8 @@ int FinalizeSimulationSetup(bool isUdp, int packetLength, double errorRate, cons
 	if (isUdp) {
 		transportProtocol = UdpSocketFactory::GetTypeId();
 	}
-	dataRateString = dataRate;
+	dataRateString = static_cast<char*>(malloc((strlen(dataRate) + 1) * sizeof(char)));
+	strcpy(dataRateString, dataRate);
 
 	SetSockets(nodesCount, nodes);
 
