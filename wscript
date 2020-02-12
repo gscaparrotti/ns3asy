@@ -13,6 +13,7 @@ def build(bld):
         'model/genericApp.cc',
         'model/defaultCallbacks.cc',
         'model/topology.cc',
+        'model/ns3asyConfig.cc',
         'helper/ns3asy-helper.cc',
         ]
 
@@ -28,6 +29,7 @@ def build(bld):
         'model/genericApp.h',
         'model/defaultCallbacks.h',
         'model/topology.h',
+        'model/ns3asyConfig.h',
         'helper/ns3asy-helper.h',
         ]
 

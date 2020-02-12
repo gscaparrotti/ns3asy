@@ -20,15 +20,14 @@
 #include <unistd.h>
 #include <iostream>
 #include <vector>
+#include "ns3asyConfig.h"
 
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("ns3asy");
 
 static int scheduledEventsCount = 0;
-static int length = 1040;
-static char* dataRateString;
-static TypeId transportProtocol = TcpSocketFactory::GetTypeId();
+static Ptr<ns3asyConfig> config;
 static vector<Ptr<GenericApp>> apps;
 static Ptr<Topology> topology = CreateObject<Topology>(0);
 static Ipv4InterfaceContainer interfaces;
@@ -63,10 +62,11 @@ void AddLink(unsigned int sourceIndex, unsigned int destinationIndex) {
 }
 
 bool isUdp() {
-	return transportProtocol == UdpSocketFactory::GetTypeId();
+	return config->getTransportProtocol() == UdpSocketFactory::GetTypeId();
 }
 
 static void SetSockets(unsigned int nodesCount, NodeContainer nodes) {
+	TypeId transportProtocol = config->getTransportProtocol();
 	for (unsigned int i = 0; i < nodesCount; i++) {
 		Ptr<Socket> serverSocket = Socket::CreateSocket(nodes.Get(i), transportProtocol);
 		vector<Ptr<Socket>> sendSockets;
@@ -100,6 +100,8 @@ int FinalizeSimulationSetup(bool isUdp, int packetLength, double errorRate, cons
 	Ptr<DefaultSimulatorImpl> s = CreateObject<DefaultSimulatorImpl>();
 	Simulator::SetImplementation(s);
 
+	config = CreateObject<ns3asyConfig>(isUdp, packetLength, dataRate);
+
 	unsigned int nodesCount = topology->GetNodesCount();
 
 	NodeContainer nodes;
@@ -127,21 +129,13 @@ int FinalizeSimulationSetup(bool isUdp, int packetLength, double errorRate, cons
 	address.SetBase("10.1.1.0", "255.255.255.0");
 	interfaces = address.Assign(devices);
 
-	if (packetLength > 0) {
-		length = packetLength;
-	}
-	if (isUdp) {
-		transportProtocol = UdpSocketFactory::GetTypeId();
-	}
-	dataRateString = static_cast<char*>(malloc((strlen(dataRate) + 1) * sizeof(char)));
-	strcpy(dataRateString, dataRate);
-
 	SetSockets(nodesCount, nodes);
 
 	return 0;
 }
 
-int FinalizeWithWifiPhy() {
+int FinalizeWithWifiPhy(bool isUdp, int packetLength, double errorRate, const char* dataRate,
+		const char* propagationDelay, const char* propagationLoss, double xPos[], double yPos[], double zPos[]) {
 	//PHY == physical layer
 
 	std::string phyRate = "HtMcs7";
@@ -216,7 +210,7 @@ int FinalizeWithWifiPhy() {
 
 void SchedulePacketsSending(unsigned int senderIndex, unsigned int nPackets, const char* payload, int length) {
 	Simulator::Schedule(MicroSeconds(++scheduledEventsCount), &GenericApp::SendPackets,
-			apps.at(senderIndex), 1040, nPackets, DataRate(dataRateString), payload, length);
+			apps.at(senderIndex), config->getPacketLength(), nPackets, config->getDataRate(), payload, length);
 }
 
 void ResumeSimulation(double delay) {
