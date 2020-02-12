@@ -13,9 +13,10 @@ compiler:
   - gcc
 before_install:
   - eval "${COMPILER_VERSION}"
-  - git clone --depth=1 https://github.com/nsnam/ns-3-dev-git ns-3-dev
-  - git clone --depth=1 https://github.com/gscaparrotti/ns3asy ns-3-dev/src/ns3asy
+  - wget https://www.nsnam.org/release/ns-allinone-3.29.tar.bz2 -q
+  - tar xjf ns-allinone-3.29.tar.bz2
+  - git clone --depth=1 https://github.com/gscaparrotti/ns3asy ns-allinone-3.29/ns-3.29/src/ns3asy
 script:
-  - cd ns-3-dev/
+  - cd ns-allinone-3.29/ns-3.29/
   - ./waf configure
   - ./waf build
