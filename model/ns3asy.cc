@@ -209,7 +209,7 @@ int FinalizeWithWifiPhy(bool isUdp, int packetLength, double errorRate, const ch
 }
 
 void SchedulePacketsSending(unsigned int senderIndex, unsigned int nPackets, const char* payload, int length) {
-	Simulator::Schedule(MicroSeconds(++scheduledEventsCount), &GenericApp::SendPackets,
+	Simulator::Schedule(MicroSeconds(++scheduledEventsCount * 100), &GenericApp::SendPackets,
 			apps.at(senderIndex), config->getPacketLength(), nPackets, config->getDataRate(), payload, length);
 }
 
