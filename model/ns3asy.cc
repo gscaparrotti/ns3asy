@@ -108,6 +108,9 @@ int FinalizeSimulationSetup(bool isUdp, int packetLength, double errorRate, cons
 	nodes.Create(nodesCount);
 
 	CsmaHelper csma;
+	if (config->getDataRate().GetBitRate() != 0) {
+		csma.SetChannelAttribute("DataRate", DataRateValue(config->getDataRate()));
+	}
 
 	NetDeviceContainer devices;
 	devices = csma.Install(nodes);

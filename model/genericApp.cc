@@ -151,7 +151,7 @@ void GenericApp::ScheduleTx(const char* payload, int length) {
 	if (m_running) {
 		//la frequenza con cui l' Application genera gli eventi non è necessariamente
 		//dipendente dalla velocità del canale di comunicazione sottostante
-		Time tNext(Seconds(m_packetSize * 8 / static_cast<double>(m_dataRate.GetBitRate())));
+		Time tNext(Seconds((m_packetSize != 0 ? m_packetSize : length) * 8 / static_cast<double>(m_dataRate.GetBitRate())));
 		//l'evento del prossimo invio viene assegnato al campo m_sendEvent per
 		//poterlo cancellare nel momento in cui la simulazione si deve fermare
 		m_sendEvent = Simulator::Schedule(tNext, &GenericApp::SendPacket, this, payload, length);

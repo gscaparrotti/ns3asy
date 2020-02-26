@@ -9,8 +9,8 @@
 
 ns3asyConfig::ns3asyConfig(bool isUdp, int packetLength, const char* dataRate) {
 	m_transportProtocol = isUdp ? UdpSocketFactory::GetTypeId() : TcpSocketFactory::GetTypeId();
-	m_packetLength = packetLength != 0 ? packetLength : 1040;
-	m_dataRate = DataRate(dataRate);
+	m_packetLength = packetLength;
+	m_dataRate = DataRate(strcmp(dataRate, "Default") == 0 ? "0Mbps" : dataRate);
 }
 
 TypeId ns3asyConfig::getTransportProtocol() {
