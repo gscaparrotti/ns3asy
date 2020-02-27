@@ -12,8 +12,8 @@ extern "C" bool isUdp();
 
 extern "C" int FinalizeSimulationSetup(bool isUdp, int packetLength, double errorRate, const char* dataRate);
 
-extern "C" int FinalizeWithWifiPhy(bool isUdp, int packetLength, double errorRate, const char* dataRate,
-		const char* propagationDelay, const char* propagationLoss, double xPos[], double yPos[], double zPos[]);
+extern "C" int FinalizeWithWifiPhy(bool isUdp, int packetLength,
+		const char* propagationDelay, const char* propagationLoss, double xPos[], double yPos[]);
 
 extern "C" void SchedulePacketsSending(unsigned int senderIndex, unsigned int nPackets, const char* payload, int length);
 

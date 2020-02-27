@@ -28,6 +28,7 @@ NS_LOG_COMPONENT_DEFINE("ns3asy");
 
 static int scheduledEventsCount = 0;
 static Ptr<ns3asyConfig> config;
+static bool isWifi = false;
 static vector<Ptr<GenericApp>> apps;
 static Ptr<Topology> topology = CreateObject<Topology>(0);
 static Ipv4InterfaceContainer interfaces;
@@ -137,26 +138,29 @@ int FinalizeSimulationSetup(bool isUdp, int packetLength, double errorRate, cons
 	return 0;
 }
 
-int FinalizeWithWifiPhy(bool isUdp, int packetLength, double errorRate, const char* dataRate,
-		const char* propagationDelay, const char* propagationLoss, double xPos[], double yPos[], double zPos[]) {
-	//PHY == physical layer
+int FinalizeWithWifiPhy(bool isUdp, int packetLength,
+		const char* propagationDelay, const char* propagationLoss, double xPos[], double yPos[]) {
 
-	std::string phyRate = "HtMcs7";
+//	std::cout << "WIFI";
+	config = CreateObject<ns3asyConfig>(isUdp, packetLength, "3Mbps");
+	isWifi = true;
+
+	//PHY == physical layer
 	WifiMacHelper wifiMac;
 	WifiHelper wifiHelper;
-	wifiHelper.SetStandard(WIFI_PHY_STANDARD_80211n_5GHZ);
 
 	/* Set up Legacy Channel */
 	YansWifiChannelHelper wifiChannel;
-	wifiChannel.SetPropagationDelay("ns3::ConstantSpeedPropagationDelayModel");
-	wifiChannel.AddPropagationLoss("ns3::FriisPropagationLossModel");
+	std::string propagationDelayString(propagationDelay);
+	wifiChannel.SetPropagationDelay(propagationDelayString);
+	std::string propagationLossString(propagationLoss);
+	wifiChannel.AddPropagationLoss(propagationLossString);
 
 	/* Setup Physical Layer */
 	YansWifiPhyHelper wifiPhy = YansWifiPhyHelper::Default();
 	wifiPhy.SetChannel(wifiChannel.Create());
 	wifiPhy.SetErrorRateModel("ns3::YansErrorRateModel");
-	wifiHelper.SetRemoteStationManager("ns3::ConstantRateWifiManager",
-			"DataMode", StringValue(phyRate), "ControlMode", StringValue("HtMcs0"));
+	wifiHelper.SetRemoteStationManager("ns3::ConstantRateWifiManager");
 
 	unsigned int nodesCount = topology->GetNodesCount();
 
@@ -182,13 +186,18 @@ int FinalizeWithWifiPhy(bool isUdp, int packetLength, double errorRate, const ch
 	/* Mobility model */
 	MobilityHelper mobility;
 	Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator>();
-	positionAlloc->Add(Vector(0.0, 0.0, 0.0));
-	positionAlloc->Add(Vector(174.0, 1.0, 0.0));
+	for (unsigned int i = 0; i < topology->GetNodesCount() + 1; i++) {
+		positionAlloc->Add(Vector(xPos[i], yPos[i], 0.0));
+	}
 
 	mobility.SetPositionAllocator(positionAlloc);
 	mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
 	mobility.Install(apWifiNode);
 	mobility.Install(networkNodes);
+
+//	Vector appos = apWifiNode->GetObject<MobilityModel>()->GetPosition();
+//	printf("ap x: %f", appos.x);
+//	printf("ap y: %f", appos.y);
 
 	/* Internet stack */
 	InternetStackHelper stack;
@@ -205,8 +214,8 @@ int FinalizeWithWifiPhy(bool isUdp, int packetLength, double errorRate, const ch
 
 	SetSockets(nodesCount, networkNodes);
 
-    wifiPhy.EnablePcap ("AccessPoint", apDevice);
-    wifiPhy.EnablePcap ("Station", staDevices);
+    // wifiPhy.EnablePcap ("AccessPoint", apDevice);
+    // wifiPhy.EnablePcap ("Station", staDevices);
 
 	return 0;
 }
@@ -220,6 +229,8 @@ void ResumeSimulation(double delay) {
 	scheduledEventsCount = 0;
 	if (delay >= 0) {
 		Simulator::Stop(Seconds(delay));
+	} else if (isWifi) {
+		Simulator::Stop(Seconds(60));
 	}
 	Simulator::Run();
 }
@@ -228,6 +239,7 @@ void StopSimulation() {
 	for (unsigned int i = 0; i < apps.size(); i++) {
 		apps.at(i)->StopApplication();
 	}
+	Simulator::Stop(Seconds(60));
 	Simulator::Run();
 	Simulator::Stop();
 	Simulator::Destroy();
